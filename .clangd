@@ -1,0 +1,135 @@
+# ============================================================================
+# kron — Configuración de clangd
+# .clangd
+# ============================================================================
+# Configura el LSP clangd para nvim con análisis óptimo del proyecto
+# Requiere: clangd 12+
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Base de compilación
+# ----------------------------------------------------------------------------
+# clangd busca compile_commands.json en estos directorios
+CompileFlags:
+  # Directorio de build donde CMake genera compile_commands.json
+  CompilationDatabase: build/
+  
+  # Flags adicionales que aplican a todos los archivos
+  Add:
+    # C++20 (redundante si está en compile_commands.json, pero explícito)
+    - "-std=c++20"
+    
+    # Directorios de include (ajusta si cambias la estructura)
+    - "-Iinclude"
+    
+    # Warnings que quieres que clangd reporte en tiempo real
+    - "-Wall"
+    - "-Wextra"
+    - "-Wpedantic"
+    - "-Wconversion"
+    - "-Wsign-conversion"
+    - "-Wshadow"
+    
+    # Desactiva warnings molestos en desarrollo
+    - "-Wno-unused-parameter"
+    - "-Wno-unused-variable"
+    
+  # Flags que quieres remover (útil si compile_commands.json los incluye)
+  Remove:
+    # Ejemplo: si CMake añade flags de target que confunden a clangd
+    # - "-march=native"
+
+# ----------------------------------------------------------------------------
+# Diagnósticos
+# ----------------------------------------------------------------------------
+Diagnostics:
+  # Nivel de severidad mínima para mostrar
+  # Opciones: Error, Warning, Information, Hint
+  Suppress:
+    # Suprime advertencias específicas por nombre
+    # Ejemplo: - "unused-variable"
+    
+  ClangTidy:
+    # Activa clang-tidy para análisis estático adicional
+    Add:
+      # Checks básicos de modernización
+      - "modernize-*"
+      
+      # Checks de performance
+      - "performance-*"
+      
+      # Checks de legibilidad
+      - "readability-identifier-naming"
+      - "readability-braces-around-statements"
+      
+      # Checks de seguridad
+      - "bugprone-*"
+      
+    Remove:
+      # Desactiva checks molestos o falsos positivos
+      - "modernize-use-trailing-return-type"
+      - "readability-magic-numbers"
+      - "bugprone-easily-swappable-parameters"
+
+# ----------------------------------------------------------------------------
+# Índice del código
+# ----------------------------------------------------------------------------
+Index:
+  # Indexar archivos en background para completado más rápido
+  Background: Build
+  
+  # Directorios a indexar (relativo a la raíz del proyecto)
+  StandardLibrary: Yes
+
+# ----------------------------------------------------------------------------
+# Completado de código
+# ----------------------------------------------------------------------------
+Completion:
+  # Límite de ítems en el menú de completado
+  Limit: 50
+  
+  # Incluir completados de todos los símbolos accesibles
+  AllScopes: Yes
+
+# ----------------------------------------------------------------------------
+# Hover (información al pasar el cursor)
+# ----------------------------------------------------------------------------
+Hover:
+  # Muestra la firma completa de funciones
+  ShowAKA: Yes
+
+# ----------------------------------------------------------------------------
+# InlayHints (hints visuales en el código)
+# ----------------------------------------------------------------------------
+InlayHints:
+  # Muestra nombres de parámetros en llamadas a función
+  ParameterNames: Yes
+  
+  # Muestra tipos deducidos auto/decltype
+  DeducedTypes: Yes
+  
+  # Muestra tipos designados en structured bindings
+  Designators: Yes
+
+# ----------------------------------------------------------------------------
+# Notas de uso
+# ----------------------------------------------------------------------------
+#
+# 1. Generar compile_commands.json:
+#    $ mkdir -p build && cd build
+#    $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+#    $ cd ..
+#
+# 2. Verificar que clangd lo encuentra:
+#    $ clangd --check=src/kron-main.cpp
+#
+# 3. En nvim, asegúrate de tener configurado el LSP:
+#    require('lspconfig').clangd.setup{}
+#
+# 4. Si clangd no encuentra los headers, verifica que la ruta de CompilationDatabase
+#    sea correcta y que compile_commands.json exista en build/
+#
+# 5. Para recargar la configuración en nvim:
+#    :LspRestart
+#
+# ----------------------------------------------------------------------------

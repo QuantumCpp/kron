@@ -1,24 +1,36 @@
+# ============================================================================
+# kron — Gitignore completo
+# .gitignore
+# ============================================================================
+# Excluye archivos generados por compilación, build, IDEs y editores
+# Actualizado para C++20 con CMake y clangd
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Archivos de compilación C++
+# ----------------------------------------------------------------------------
 # Prerequisites
 *.d
 
-# Compiled Object files
+# Compiled object files
 *.slo
 *.lo
 *.o
 *.obj
 
-# Precompiled Headers
+# Precompiled headers
 *.gch
 *.pch
 
 # Linker files
 *.ilk
 
-# Debugger Files
+# Debugger files
 *.pdb
 
-# Compiled Dynamic libraries
+# Compiled dynamic libraries
 *.so
+*.so.*
 *.dylib
 *.dll
 
@@ -26,7 +38,7 @@
 *.mod
 *.smod
 
-# Compiled Static libraries
+# Compiled static libraries
 *.lai
 *.la
 *.a
@@ -37,5 +49,244 @@
 *.out
 *.app
 
-# debug information files
+# Debug information files
 *.dwo
+
+# Core dumps
+core
+core.*
+
+# ----------------------------------------------------------------------------
+# Directorios de build
+# ----------------------------------------------------------------------------
+# CMake build directories
+build/
+build-*/
+cmake-build-*/
+out/
+bin/
+lib/
+
+# Binarios generados por kron
+kron-basic
+kron-standard
+kron-complete
+
+# ----------------------------------------------------------------------------
+# CMake
+# ----------------------------------------------------------------------------
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+_deps/
+
+# compile_commands.json generado (se excluye para evitar conflictos, pero algunos prefieren versionarlo)
+compile_commands.json
+
+# Archivos de CPack
+CPackConfig.cmake
+CPackSourceConfig.cmake
+
+# ----------------------------------------------------------------------------
+# clangd (LSP)
+# ----------------------------------------------------------------------------
+.cache/
+.clangd/
+.clang-format
+.clang-tidy
+
+# ----------------------------------------------------------------------------
+# Editores y IDEs
+# ----------------------------------------------------------------------------
+
+## Vim / Neovim
+*.swp
+*.swo
+*~
+.*.sw?
+Session.vim
+.netrwhist
+tags
+.vim/
+
+## VSCode
+.vscode/
+*.code-workspace
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.tmp_proj
+*.log
+*.vspscc
+*.vssscc
+.builds/
+*.pidb
+*.svclog
+*.scc
+
+## CLion / IntelliJ IDEA
+.idea/
+cmake-build-*/
+*.iml
+*.iws
+
+## Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+## Eclipse
+.cproject
+.project
+.settings/
+
+## Qt Creator
+*.pro.user
+*.pro.user.*
+
+# ----------------------------------------------------------------------------
+# Herramientas de desarrollo
+# ----------------------------------------------------------------------------
+
+## Valgrind
+vgcore.*
+*.valgrind
+massif.out.*
+callgrind.out.*
+
+## gcov / lcov
+*.gcno
+*.gcda
+*.gcov
+coverage/
+*.lcov
+
+## gprof
+gmon.out
+
+## Sanitizers
+*.san
+*.asan
+*.tsan
+*.ubsan
+
+## Profilers
+perf.data
+perf.data.old
+
+# ----------------------------------------------------------------------------
+# Testing
+# ----------------------------------------------------------------------------
+Testing/
+test-results/
+*.test
+test_*.log
+
+# GoogleTest
+googletest-*/
+gtest-*/
+
+# Catch2
+catch2-*/
+
+# ----------------------------------------------------------------------------
+# Documentación generada
+# ----------------------------------------------------------------------------
+docs/html/
+docs/latex/
+docs/_build/
+Doxyfile.bak
+*.dox
+
+# ----------------------------------------------------------------------------
+# Dependencias externas (si las usas)
+# ----------------------------------------------------------------------------
+third-party/
+external/
+vendor/
+deps/
+
+# Pero mantén el directorio si tiene un README
+!third-party/README.md
+!external/README.md
+!vendor/README.md
+
+# ----------------------------------------------------------------------------
+# Sistema operativo
+# ----------------------------------------------------------------------------
+
+## macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+## Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+## Linux
+.directory
+.Trash-*
+.nfs*
+
+# ----------------------------------------------------------------------------
+# Archivos temporales
+# ----------------------------------------------------------------------------
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*~
+
+# ----------------------------------------------------------------------------
+# Logs
+# ----------------------------------------------------------------------------
+*.log
+logs/
+*.log.*
+
+# ----------------------------------------------------------------------------
+# Packaging
+# ----------------------------------------------------------------------------
+*.tar.gz
+*.zip
+*.7z
+*.rar
+*.deb
+*.rpm
+
+# ----------------------------------------------------------------------------
+# Archivos personales / locales
+# ----------------------------------------------------------------------------
+.env
+.env.local
+local.cmake
+*.local
+
+# ----------------------------------------------------------------------------
+# Notas importantes
+# ----------------------------------------------------------------------------
+#
+# 1. compile_commands.json: Algunos prefieren versionarlo para que el LSP
+#    funcione sin regenerar el build. Si quieres incluirlo, comenta la línea.
+#
+# 2. Si usas submodules de Git para dependencias, asegúrate de que
+#    third-party/ o external/ estén correctamente gestionados.
+#
+# 3. Si trabajas en equipo, considera versionar:
+#    - .clangd (config compartida del LSP)
+#    - .clang-format (estilo de código)
+#    - cmake/toolchain files (si hay cross-compilation)
+#
+# ----------------------------------------------------------------------------
