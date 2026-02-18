@@ -2,6 +2,6 @@
 #include "command-raw-metadata.hpp"
 #include <string>
 
-void GeneralCommandLog();
 void CreatedCommandData();
+void GeneralCommandLog(const CommandMetaData& command);
 const CommandMetaData* GetCommandData(const std::string& command);

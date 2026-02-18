@@ -2,7 +2,7 @@
 #include "error-raw-metadata.hpp"
 #include "error-id.hpp"
 
-void GeneralErrorLog();
-void CreatedErrorData(const ErrorMetaData& Error);
-const ErrorMetaData* GetErrorData(const ErrorID& Error_ID); 
+void CreatedErrorData();
+void GeneralErrorLog(const ErrorMetaData& error);
+const ErrorMetaData* GetErrorData(const ErrorID& error); 
 

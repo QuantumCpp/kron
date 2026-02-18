@@ -1,3 +1,4 @@
+#pragma once
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -10,6 +11,7 @@ enum class TypeDataReceived : std::uint8_t{
   DATE,
   SIZE,
   EXTENSION,
+  NONE,
 };
 
 struct FilterStruct{
@@ -35,8 +37,8 @@ using OptionHandler = std::variant<
 
 struct OptionMetaData{
   std::string normalized_name;
-  std::vector<std::string> alias_name;
+  std::string alias_name;
   std::vector<std::string> conflict_name;
   TypeDataReceived data_type;
-
+  OptionHandler hanlder;
 };
