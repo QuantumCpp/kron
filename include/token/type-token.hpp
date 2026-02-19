@@ -1,8 +1,7 @@
 #include <cstdint>
 enum class TypeToken : std::uint8_t{
   COMMAND,
-  OPTION_SHORT,
-  OPTION_LONG,
+  OPTION_NOT_NORMALIZED,
   OPTION_NORMALIZED,
 
   LITERAL,
