@@ -15,8 +15,8 @@ struct WithoutDetails{
   std::string trigger;
 };
 
-using WithDetailsHanlder = std::function<bool (const WithDetails& )>;
-using WithoutDetailsHandler = std::function<bool (const WithoutDetails& )>;
+using WithDetailsHanlder = std::function<void (const WithDetails& )>;
+using WithoutDetailsHandler = std::function<void (const WithoutDetails& )>;
 
 using Errorhandler = std::variant<
   WithDetailsHanlder,
