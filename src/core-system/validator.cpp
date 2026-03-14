@@ -8,6 +8,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <ranges>
 #include <string_view>
@@ -160,6 +161,11 @@ bool ValidationGroupToken(GroupToken& group_raw){
           });
       });
 
+  //ordenar las option en base a su cronologia de ejecucion
+  std::ranges::sort(group_raw.options,[](const Token& a, const Token& b){
+      return static_cast<uint8_t>(GetOptionData(a.name)->category) <
+             static_cast<uint8_t>(GetOptionData(b.name)->category);
+      });
 
   return true;
 }
