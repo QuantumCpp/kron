@@ -1,5 +1,6 @@
 #include "../../include/command/command-raw-metadata.hpp"
 #include "../../include/command/command-implementation.hpp"
+#include "command-handler-include/command-hanlder-include.hpp"
 
 void CreatedCommandData(){
   // ============================================================================
@@ -29,7 +30,7 @@ void CreatedCommandData(){
     "--filter",       // Filtra por patrón glob: *.cpp, test_*
     "--no-header"     // Omite la cabecera de la tabla
   };
-  // list.handler = ListHandler;
+  list.handler = LIST_HANDLER;
   GeneralCommandLog(list);
 
   // --------------------------------------------------------------------------
