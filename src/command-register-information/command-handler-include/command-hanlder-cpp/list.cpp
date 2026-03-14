@@ -10,9 +10,11 @@
 #include <filesystem>
 #include <format>
 #include <iostream>
+#include <ranges>
 #include <ratio>
 #include <string>
 #include <sys/types.h>
+#include <system_error>
 #include <variant>
 #include <sys/stat.h>
 #include <pwd.h>
@@ -64,6 +66,14 @@ namespace  {
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm);
     return buffer;
   }
+  
+  size_t width_dynamic(const std::vector<std::filesystem::directory_entry>& entry_path){
+    if(entry_path.empty()) {return 20;};
+    auto size_entry = entry_path | std::views::transform([](const auto& e){
+        return e.path().filename().string().size();
+        });
+    return *std::ranges::max_element(size_entry);
+  }
 
   void PrintInformation(const bool& long_format, const bool& no_header_format,
       const  std::vector<std::filesystem::directory_entry>& file_entry, const std::filesystem::path& path_entry)
@@ -75,13 +85,14 @@ namespace  {
       }
     }
     else{
+      size_t size_width = width_dynamic(file_entry) + 5;
       if(!no_header_format){
-        std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<20} {:<8} {:<8} {:<20}\n",
+        std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<{}} {:<8} {:<8} {:<20}\n",
                       "PERMISOS", 
                       "INODE",
                       "GRUPO",
                       "PROPIETARIO",
-                      "NOMBRE" ,
+                      "NOMBRE" , size_width,
                       "TIPO",
                       "TAMANO",
                       "FECHA DE MODIFICACION");
@@ -92,20 +103,21 @@ namespace  {
         const auto& perms_path = string_perms(path);
         struct stat stat_path;
         if(stat(path.path().c_str(), &stat_path) == 0){
-          const auto& size_path = path.is_directory()? " " : size_parse(stat_path.st_size);
+          const auto& size_path = path.is_directory()? std::string("—") : size_parse(stat_path.st_size);
           passwd* pw = getpwuid(stat_path.st_uid);
           group* gp = getgrgid(stat_path.st_gid);
           
           std::string gp_name = gp ? gp->gr_name : "UNKOWN";
           std::string pw_name = pw ? pw->pw_name : "UNKOWN";
+          
 
           auto date_path = date_parse(path.last_write_time());
-          std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<20} {:<8} {:<8} {:<8}\n",
+          std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<{}} {:<8} {:<8} {:<8}\n",
               perms_path,
               stat_path.st_ino,
               gp_name,
               pw_name,
-              path.path().filename().string() + (path.is_directory() ? "/" : ""), 
+              path.path().filename().string() + (path.is_directory() ? "/" : ""), size_width, 
               type,
               size_path,
               date_path);
@@ -113,8 +125,6 @@ namespace  {
       }
     }
   }
-
-
 }
 
 void LIST_HANDLER(const GroupToken& token_group){
