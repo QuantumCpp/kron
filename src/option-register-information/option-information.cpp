@@ -2,6 +2,7 @@
 #include "../../include/option/option-implementation.hpp"
 #include <algorithm>
 #include <any>
+#include <cctype>
 #include <filesystem>
 
 void CreatedOptionData(){
@@ -12,7 +13,7 @@ void CreatedOptionData(){
   help.conflict_name   = {};
   help.data_type       = TypeDataReceived::NONE;
   help.category        = OptionCategory::GLOBAL;
-  // help.hanlder = HelpHandler;
+  //help.hanlder = HelpHandler;
   GeneralOptionLog(help);
 
   OptionMetaData version;
@@ -118,7 +119,11 @@ void CreatedOptionData(){
       if(ordered_filter == "name"){
       std::ranges::sort(filter_contex.entries, [](const std::filesystem::directory_entry& a , 
             const std::filesystem::directory_entry& b){
-          return a.path().filename() < b.path().filename();
+          std::string name_a = a.path().filename();
+          std::string name_b = b.path().filename();
+          std::ranges::transform(name_a, name_a.begin() , ::tolower);
+          std::ranges::transform(name_b, name_b.begin(), ::tolower);
+          return name_a < name_b;
           });
       }
       if(ordered_filter == "size"){
@@ -229,7 +234,7 @@ void CreatedOptionData(){
   fields.conflict_name   = {};
   fields.data_type       = TypeDataReceived::STRING;
   fields.category        = OptionCategory::PRESENTATION;
-  // fields.hanlder = std::monostate{};
+  fields.hanlder = std::monostate{};
   GeneralOptionLog(fields);
 
   OptionMetaData force;
