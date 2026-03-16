@@ -4,6 +4,7 @@
 #include "token/token-raw-metadata.hpp"
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstddef>
 #include <ctime>
@@ -11,14 +12,31 @@
 #include <format>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <string_view>
 #include <sys/types.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <sys/stat.h>
 #include <pwd.h>
 #include <grp.h>
+#include <ranges>
+#include <vector>
+
+const std::vector<std::pair<std::string, int>> HEADERS = {
+  {"PERMS",         10},
+  {"INODE",         10},
+  {"HARDLINKS",     10},
+  {"GROUP",         10},
+  {"OWNER",         10},
+  {"NAME",          30},
+  {"TYPE",           8},
+  {"SIZE",           8},
+  {"LAST MODIFIED", 12}
+};
 
 struct DirID {
   dev_t device;
@@ -40,6 +58,19 @@ namespace std {
 }
 
 namespace {
+
+  std::vector<std::string> split_field(std::string_view input){
+    std::vector<std::string> result;
+    for(auto individual_field : input
+        | std::views::filter([](char c){ return c != ' '; })
+        | std::views::transform([](char c){ return (char)std::toupper(c); })
+        | std::views::split(','))
+    {
+      result.emplace_back(individual_field.begin(), individual_field.end());
+    }
+    return result;
+  }
+
   std::string string_perms(const std::filesystem::path& path){
     std::filesystem::perms p = std::filesystem::status(path).permissions();
     auto check = [&](std::filesystem::perms bit, char c){
@@ -78,43 +109,97 @@ namespace {
     return buffer.data();
   }
 
+  std::vector<std::string> build_entry(
+      const std::filesystem::directory_entry& path,
+      const struct stat& stat_path)
+  {
+    const auto perms_path = string_perms(path);
+    const auto size_path  = path.is_directory() ? std::string("—") : size_parse(stat_path.st_size);
+    passwd* pw = getpwuid(stat_path.st_uid);
+    group*  gp = getgrgid(stat_path.st_gid);
+    std::string gp_name  = gp ? gp->gr_name : "UNKNOWN";
+    std::string pw_name  = pw ? pw->pw_name : "UNKNOWN";
+    std::string name_cut = path.path().filename().string().size() > 30
+      ? path.path().filename().string().substr(0, 30)
+      : path.path().filename().string();
+    auto date_path = date_parse(path.last_write_time());
+    std::string type = path.is_directory() ? "DIR" : "FIL";
+
+    return {
+      perms_path,
+      std::to_string(stat_path.st_ino),
+      std::to_string(stat_path.st_nlink),
+      gp_name,
+      pw_name,
+      name_cut + (path.is_directory() ? "/" : " "),
+      type,
+      size_path,
+      date_path
+    };
+  }
+
   void PrintInformation(
       const std::unordered_map<std::string, std::vector<std::filesystem::directory_entry>>& file_entry,
-      const std::vector<std::string>& dirs_name)
+      const std::vector<std::string>& dirs_name, const bool& field, const std::string& field_option)
   {
     for(const auto& dirs : dirs_name){
-      if(!file_entry.contains(dirs)) {continue;}
+      if(!file_entry.contains(dirs)) { continue; }
 
-      std::cout << std::format("{}/:\n", dirs);
-      std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<30} {:<8} {:<8} {:<20}\n",
-          "PERMISOS", "INODE", "GRUPO", "PROPIETARIO",
-          "NOMBRE", "TIPO", "TAMANO", "FECHA DE MODIFICACION");
+      if(field){
+        const std::vector<std::string> header_field = split_field(field_option);
 
-      for(const auto& path : file_entry.at(dirs)){
-        std::string type      = path.is_directory() ? "DIR" : "FIL";
-        const auto perms_path = string_perms(path);
-        struct stat stat_path;
-        if(stat(path.path().c_str(), &stat_path) == 0){
-          const auto size_path = path.is_directory()
-              ? std::string("—")
-              : size_parse(stat_path.st_size);
-          passwd* pw = getpwuid(stat_path.st_uid);
-          group*  gp = getgrgid(stat_path.st_gid);
-          std::string gp_name  = gp ? gp->gr_name : "UNKNOWN";
-          std::string pw_name  = pw ? pw->pw_name : "UNKNOWN";
-          std::string name_cut = path.path().filename().string().size() > 30
-              ? path.path().filename().string().substr(0, 30)
-              : path.path().filename().string();
-          auto date_path = date_parse(path.last_write_time());
-          std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<30} {:<8} {:<8} {:<8}\n",
-              perms_path,
-              stat_path.st_ino,
-              gp_name,
-              pw_name,
-              name_cut + (path.is_directory() ? "/" : ""),
-              type,
-              size_path,
-              date_path);
+        std::cout << std::format("{}/:\n", dirs);
+
+        // Imprimir headers seleccionados
+        for(const auto& header : header_field){
+          auto it = std::ranges::find_if(HEADERS, [&](const auto& head){
+            return head.first == header;
+          });
+          if(it != HEADERS.end()){
+            std::cout << std::format("{:<{}}", it->first, it->second);
+          }
+        }
+        std::cout << '\n';
+
+        // Imprimir filas
+        for(const auto& path : file_entry.at(dirs)){
+          struct stat stat_path;
+          if(stat(path.path().c_str(), &stat_path) == 0){
+            const auto entry_temp = build_entry(path, stat_path);
+
+            for(const auto& header : header_field){
+              auto it = std::ranges::find_if(HEADERS, [&](const auto& head){
+                return head.first == header;
+              });
+              if(it != HEADERS.end()){
+                auto idx = static_cast<size_t>(std::distance(HEADERS.begin(), it));
+                std::cout << std::format("{:<{}}", entry_temp[idx], it->second);
+              }
+            }
+            std::cout << '\n';
+          }
+        }
+      }
+      else{
+        std::cout << std::format("{}/:\n", dirs);
+
+        // Imprimir todos los headers
+        for(const auto& header : HEADERS){
+          std::cout << std::format("{:<{}}", header.first, header.second);
+        }
+        std::cout << '\n';
+
+        // Imprimir todas las filas
+        for(const auto& path : file_entry.at(dirs)){
+          struct stat stat_path;
+          if(stat(path.path().c_str(), &stat_path) == 0){
+            const auto entry_temp = build_entry(path, stat_path);
+
+            for(size_t i = 0; i < HEADERS.size(); i++){
+              std::cout << std::format("{:<{}}", entry_temp[i], HEADERS[i].second);
+            }
+            std::cout << '\n';
+          }
         }
       }
     }
@@ -135,7 +220,7 @@ void INSPECT_HANDLER(const GroupToken& token_group){
   }
 
   bool recursive = std::ranges::any_of(token_group.options, [](const Token& t){
-      return t.name == "--recursive";
+    return t.name == "--recursive";
   });
 
   std::vector<std::filesystem::directory_entry> temp_entry;
@@ -172,7 +257,7 @@ void INSPECT_HANDLER(const GroupToken& token_group){
   for(const auto& option : token_group.options){
     const auto& option_data = GetOptionData(option.name);
 
-    if(option_data->category == OptionCategory::COLLECTION) {continue;};
+    if(option_data->category == OptionCategory::COLLECTION) { continue; }
 
     if(option_data->category == OptionCategory::FILTERING ||
        option_data->category == OptionCategory::SORTING){
@@ -181,15 +266,27 @@ void INSPECT_HANDLER(const GroupToken& token_group){
         fs.entries = value;
         fs.context = option.value;
         std::visit([&](auto& handler){
-            using T = std::decay_t<decltype(handler)>;
-            if constexpr(std::is_same_v<T, FilteringProcess>){
-              handler(fs);
-            }
+          using T = std::decay_t<decltype(handler)>;
+          if constexpr(std::is_same_v<T, FilteringProcess>){
+            handler(fs);
+          }
         }, option_data->hanlder);
         multi_entry[key] = fs.entries;
       }
     }
   }
 
-  PrintInformation(multi_entry, dirs_name);
+  bool field_exist = std::ranges::any_of(token_group.options, [](const Token& t){
+    return t.name == "--fields";
+  });
+
+  std::string header_field;
+  if(field_exist){
+    auto field_option = std::ranges::find_if(token_group.options, [](const Token& t){
+      return t.name == "--fields";
+    });
+    header_field = field_option->value;
+  }
+
+  PrintInformation(multi_entry, dirs_name, field_exist, header_field);
 }
