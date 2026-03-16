@@ -45,7 +45,7 @@ void CreatedCommandData(){
    */
   CommandMetaData inspect;
   inspect.default_name       = "inspect";
-  inspect.minimun_positional = 1;
+  inspect.minimun_positional = 0;
   inspect.maximun_positional = 100;
   inspect.option_avaible = {
     "--all",             // -a: Incluye archivos ocultos
@@ -54,9 +54,10 @@ void CreatedCommandData(){
     "--follow-symlinks", // Sigue enlaces simbólicos
     "--fields",          // Selecciona campos: name,size,modified,permissions,type,inode
     "--sort",            // Ordena resultado: name, size, modified
-    "--reverse"          // Invierte el orden del sort
+    "--reverse",          // Invierte el orden del sort
+    "--filter",
   };
-  // inspect.handler = InspectHandler;
+  inspect.handler = INSPECT_HANDLER;
   GeneralCommandLog(inspect);
 
   // --------------------------------------------------------------------------
