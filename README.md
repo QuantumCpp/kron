@@ -43,7 +43,7 @@ kron <command> [options] [arguments]
 | Command | Description | Status |
 |---------|-------------|--------|
 | `list [path]` | List directory contents | ✅ |
-| `inspect <path>...` | Show full file/directory metadata | 🔧 |
+| `inspect <path>...` | Show full file/directory metadata | ✅ |
 | `copy <src> <dst>` | Copy files or directories | 🔧 |
 | `move <src> <dst>` | Move or rename | 🔧 |
 | `delete <path>...` | Delete files or directories | 🔧 |
