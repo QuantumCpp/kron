@@ -3,6 +3,7 @@
 #include "option/option-implementation.hpp"
 #include "token/token-raw-metadata.hpp"
 #include <algorithm>
+#include <any>
 #include <array>
 #include <cctype>
 #include <chrono>
@@ -235,6 +236,20 @@ void INSPECT_HANDLER(const GroupToken& token_group){
     return t.name == "--recursive";
   });
 
+  bool follow_symlink = std::ranges::any_of(token_group.options, [](const Token& t){
+      return t.name == "--follow-symlink";
+      });
+  std::filesystem::directory_options option_iterator = std::filesystem::directory_options::none;
+  if(follow_symlink){
+    option_iterator |= std::filesystem::directory_options::follow_directory_symlink;
+  }
+
+  // FIX: un solo find_if reemplaza el any_of + find_if duplicado
+  auto depth_it = std::ranges::find_if(token_group.options, [](const Token& t){
+    return t.name == "--depth";
+  });
+  bool depth = depth_it != token_group.options.end();
+
   std::vector<std::filesystem::directory_entry> temp_entry;
 
   for(const auto& dirs : dirs_name){
@@ -247,18 +262,44 @@ void INSPECT_HANDLER(const GroupToken& token_group){
     std::unordered_set<DirID> visited;
 
     if(recursive){
-      for(const auto& entry : std::filesystem::recursive_directory_iterator(dirs)){
-        struct stat s;
-        if(stat(entry.path().c_str(), &s) == 0){
-          DirID id{ .device = s.st_dev, .inode = s.st_ino };
-          if(!visited.contains(id)){
-            visited.insert(id);
-            temp_entry.emplace_back(entry);
+      if(depth){
+        // FIX: stoi seguro — primero verificar si value está vacío
+        int depth_limit = 0;
+        if(!depth_it->value.empty()){
+          depth_limit = std::stoi(depth_it->value);
+        }
+
+        for(auto entry = std::filesystem::recursive_directory_iterator(dirs, option_iterator);
+            entry != std::filesystem::recursive_directory_iterator();
+            ++entry)
+        {
+          if(entry.depth() <= depth_limit){
+            struct stat s;
+            if(stat(entry->path().c_str(), &s) == 0){
+              DirID id{ .device = s.st_dev, .inode = s.st_ino };
+              if(!visited.contains(id)){
+                visited.insert(id);
+                temp_entry.emplace_back(*entry);
+              }
+            }
+          }
+          // FIX: else { continue; } eliminado — era ruido
+        }
+      }
+      else{
+        for(const auto& entry : std::filesystem::recursive_directory_iterator(dirs,option_iterator)){
+          struct stat s;
+          if(stat(entry.path().c_str(), &s) == 0){
+            DirID id{ .device = s.st_dev, .inode = s.st_ino };
+            if(!visited.contains(id)){
+              visited.insert(id);
+              temp_entry.emplace_back(entry);
+            }
           }
         }
       }
     } else {
-      for(const auto& entry : std::filesystem::directory_iterator(dirs)){
+      for(const auto& entry : std::filesystem::directory_iterator(dirs,option_iterator)){
         temp_entry.emplace_back(entry);
       }
     }
@@ -300,14 +341,21 @@ void INSPECT_HANDLER(const GroupToken& token_group){
     header_field = field_option->value;
   }
 
-  bool only_data = std::ranges::any_of(token_group.options, [](const Token& t){
+  bool stats = std::ranges::any_of(token_group.options, [](const Token& t){
     return t.name == "--stats";
   });
+
+  bool stats_only = std::ranges::any_of(token_group.options, [](const Token& t){
+        return t.name == "--stats-only";
+      });
+
 
   auto collect_stats = [](StatsDirs acc, const auto& pair){
     for(const auto& entry : pair.second){
       acc.total_archive++;
-      if(entry.is_directory()) {acc.total_dirs++;}
+      if(!entry.is_regular_file()){
+        if(entry.is_directory()) {acc.total_dirs++;}
+      }
       else {
         acc.total_file++;
         acc.total_size += entry.file_size();
@@ -316,13 +364,14 @@ void INSPECT_HANDLER(const GroupToken& token_group){
     return acc;
   };
 
-  if(token_group.options.size() == 1 && only_data){
+  if((token_group.options.size() == 1 && stats) ||(stats_only) ){
     StatsDirs stat_dirs = std::accumulate(
         multi_entry.begin(), multi_entry.end(), StatsDirs{}, collect_stats);
+
     print_stats(stat_dirs);
   }
   else{
-    if(only_data){
+    if(stats){
       StatsDirs stat_dirs = std::accumulate(
           multi_entry.begin(), multi_entry.end(), StatsDirs{}, collect_stats);
       print_stats(stat_dirs);
