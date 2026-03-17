@@ -30,6 +30,9 @@ Requirements: **CMake 3.15+**, compiler with **C++20** support.
 ```
 kron <command> [arguments] [options]
 ```
+```
+kron <command> [options] [arguments]
+```
 
 ---
 
