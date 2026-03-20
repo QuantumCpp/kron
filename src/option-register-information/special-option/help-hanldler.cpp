@@ -772,7 +772,7 @@ void HELP_HANDLER(const std::string& option_help) {
         return;
     }
 
-    auto& cmd = option_help.front().name;
+    const auto& cmd = option_help;
 
     if (cmd == "list")          { help_list();          return;}
     if (cmd == "inspect")       { help_inspect();       return;}
