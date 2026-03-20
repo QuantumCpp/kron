@@ -15,8 +15,10 @@ void executor(const GroupToken& token_group){
     bool helper_call = std::ranges::any_of(token_group.options, [](const Token& t){
           return t.name == "--help";
         });
+
     if(helper_call){
       HELP_HANDLER(token_group.command.name);
+      return;
     }
     data_command->handler(token_group);
   }

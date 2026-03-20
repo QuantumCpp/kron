@@ -1,9 +1,7 @@
 #include "../../../include/special-option/help-option.hpp"
-#include "../../../include/token/token-raw-metadata.hpp"
 #include <string>
 #include <format>
 #include <iostream>
-#include <vector>
 
 // ─── Column widths ────────────────────────────────────────────────────────────
 // OPT  : option name  (--long-option-name)
@@ -739,7 +737,7 @@ void help_decrypt() {
 // ─── HANDLER ──────────────────────────────────────────────────────────────────
 
 void HELP_HANDLER(const std::string& option_help) {
-    if (option_help.empty()) {
+    if (option_help == std::string("empty")) {
         help_global_flags();
         help_list();
         help_inspect();
