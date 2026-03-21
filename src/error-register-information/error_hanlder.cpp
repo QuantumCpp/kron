@@ -56,3 +56,7 @@ void OPTION_REQUIERES_OPTION(const std::string& option,const std::string& requie
 void DEFAULT_VALUE_OPTION(const std::string& option, const int& default_value){
   std::cerr << std::format("[WARNING] The '{}' option requires a value, since it does not have one in the input, its default value will be used '{}'", option, default_value);
 }
+
+void EQUAL_DIRECTION(){
+  std::cerr << std::format("[ERROR] The addresses entered are the same; the process will be skipped\n");
+}

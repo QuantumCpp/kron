@@ -85,7 +85,7 @@ void CreatedCommandData(){
     "--dry-run",        // -n: Muestra qué se copiaría sin ejecutar
     "--verbose"         // Muestra cada archivo copiado
   });
-  // copy.handler = CopyHandler;
+  copy.handler = COPY_HANLDER;
   GeneralCommandLog(copy);
 
   // --------------------------------------------------------------------------
