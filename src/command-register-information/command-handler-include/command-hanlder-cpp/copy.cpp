@@ -11,15 +11,47 @@
 #include <thread>
 #include <mutex>
 #include <unordered_set>
+#include <vector>
 
 const int MAX_THREAD = 9;
 
 namespace {
+
+    void dry_run(const std::vector<std::filesystem::directory_entry>& entries_origin, 
+      const std::filesystem::directory_entry& destinatary_dirs, const std::filesystem::directory_entry& origin_dirs){
+      
+      for(const auto& entry : entries_origin){
+        std::filesystem::path path = destinatary_dirs.path() / std::filesystem::relative(entry.path(),origin_dirs); 
+        if(std::filesystem::exists(path)){
+          std::cout << std::format("[DRY-RUN] CONFLICT : {}\n", path.filename().string());
+          continue;
+        }
+        if(std::filesystem::is_directory(entry.path())){
+          std::cout << std::format("[DRY-RUN] CREATE DIR : {}\n", path.filename().string());
+          continue;
+        }
+        if(std::filesystem::is_symlink(entry.path())){
+          std::cout << std::format("[DYR-RUN CREATE SYMLINK] : {}\n", path.filename().string());
+          continue;
+        }
+        if(std::filesystem::is_regular_file(entry.path())){
+          std::cout << std::format("[DRY-RUN] COPY : {}\n", path.filename().string());
+        }
+      }
+    }
+
+
+
   void copy_dir_process(const std::vector<std::filesystem::directory_entry>& entries_origin, 
-      const std::filesystem::directory_entry& destinatary_dirs, std::filesystem::directory_entry& origin_dirs,
+      const std::filesystem::directory_entry& destinatary_dirs,const std::filesystem::directory_entry& origin_dirs,
       const std::unordered_set<std::string>& collect_option){
 
     std::filesystem::copy_options copy_option = std::filesystem::copy_options::none;
+    
+    if(collect_option.contains("--dry-run")){
+      dry_run(entries_origin, destinatary_dirs, origin_dirs);
+      return;
+    }
 
     for(const auto& option : collect_option){
       if(option == "--force"){
@@ -143,12 +175,17 @@ void COPY_HANLDER(const GroupToken& token_group){
     return;
   }
   
-  if(!origin_dirs.is_directory() || !destinatary_dirs.is_directory()){
+  if(!origin_dirs.is_directory()){
     return;
   }
 
   if(!std::filesystem::exists(destinatary_dirs)){
-    std::filesystem::create_directory(destinatary_dirs);
+    if(collect_option.contains("--dry-run")){
+      std::cout << std::format("[DRY-RUN] CREATE DIR : {}\n", destinatary_dirs.path().filename().string());
+    }
+    else{
+      std::filesystem::create_directory(destinatary_dirs);
+    }
   }
 
   if(!std::filesystem::exists(origin_dirs)){
