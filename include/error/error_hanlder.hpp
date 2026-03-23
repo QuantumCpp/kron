@@ -11,3 +11,5 @@ void INCORRECT_NUMBER_OF_POSITIONAL_NUMBER(const std::string& command, const int
 void OPTION_REQUIERES_OPTION(const std::string& option,const std::string& requieres);
 void DEFAULT_VALUE_OPTION(const std::string& option, const int& default_value);
 void EQUAL_DIRECTION();
+void ORIGIN_DIRECTORY_NOT_VALITED(const std::string& dir);
+

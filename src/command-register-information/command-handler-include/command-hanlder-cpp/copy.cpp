@@ -2,6 +2,7 @@
 #include "../../../../include/error/error_hanlder.hpp"
 #include "option/option-implementation.hpp"
 #include <algorithm>
+#include <condition_variable>
 #include <cstddef>
 #include <format>
 #include <iostream>
@@ -67,9 +68,8 @@ namespace {
     for(const auto& entry : entries_origin){
       std::filesystem::path path = destinatary_dirs.path() /  std::filesystem::relative(entry.path(), origin_dirs.path());
       if(collect_option.contains("--no-overwrite") && std::filesystem::exists(path)){
-        std::cout << std::format("[STOP] Process stopped; the entry {} already exists in the directory\n",
-        path.filename().string());
-        return;
+        std::cout << std::format("[NO-OVERWRITE] {}\n", path.filename().string());
+        continue;
       }
 
         if(std::filesystem::exists(path) && !repeat && 
@@ -146,7 +146,7 @@ namespace {
         if(copy_option == std::filesystem::copy_options::skip_existing){
           if(collect_option.contains("--verbose")) 
           {
-            std::cout << std::format("[SKIP DIR] : {}\n",path.filename().string() );
+            std::cout << std::format("[SKIP SYMLINK] : {}\n",path.filename().string() );
           }
 
           continue;
@@ -186,7 +186,7 @@ void COPY_HANLDER(const GroupToken& token_group){
   std::filesystem::directory_entry origin_dirs = std::filesystem::directory_entry(token_group.positional.front().name);
   std::filesystem::directory_entry destinatary_dirs = std::filesystem::directory_entry(token_group.positional.back().name);
   std::vector<std::filesystem::directory_entry> extract_dirs_origin;
-  
+
   auto depth_it = std::ranges::find_if(token_group.options, [](const auto& token){
       return token.name == "--depth"; 
   });
@@ -205,14 +205,21 @@ void COPY_HANLDER(const GroupToken& token_group){
     collect_option.insert(option.name);
   }
 
+  if(collect_option.contains("--depth") && !collect_option.contains("--recursive")){
+    collect_option.insert("--recursive");
+  }
+
   if((origin_dirs == destinatary_dirs)){
     EQUAL_DIRECTION();
     return;
   }
   
-  if(!origin_dirs.is_directory()){
+  
+  if(!origin_dirs.exists()){
+    ORIGIN_DIRECTORY_NOT_VALITED(origin_dirs.path().filename().string());
     return;
   }
+  
 
   if(!std::filesystem::exists(destinatary_dirs)){
     if(collect_option.contains("--dry-run")){
@@ -226,34 +233,32 @@ void COPY_HANLDER(const GroupToken& token_group){
     }
   }
 
-  if(!std::filesystem::exists(origin_dirs)){
-    //anadir error de direccion inexistente objetivo inexistente
-    return;
-  }
   dirs_name_queque.emplace(origin_dirs);
   std::vector<std::filesystem::directory_entry> dirs_entry;
   std::mutex security_dirs_name;
   std::mutex security_entry_data;
   std::vector<std::thread> threads;
+  std::condition_variable condition;
+  bool not_more_elements = false;
+  int thread_active = 0;
+
   threads.reserve(MAX_THREAD);
   if(collect_option.contains("--recursive")){
     for(size_t i = 0 ; i < MAX_THREAD ; i++ ){
       threads.emplace_back([&]{
-          bool not_empty_queque = true;
 
-          security_dirs_name.lock();
-          not_empty_queque = !dirs_name_queque.empty();
-          security_dirs_name.unlock();
 
-          while(not_empty_queque){
-            security_dirs_name.lock();
-            if(dirs_name_queque.empty()){
-              security_dirs_name.unlock();
+        while(!not_more_elements){
+            std::unique_lock<std::mutex> auto_lock(security_dirs_name);
+            condition.wait(auto_lock, [&]{return !dirs_name_queque.empty() || not_more_elements;} );
+            if(not_more_elements){
               break;
             }
             auto entry(dirs_name_queque.front());
             dirs_name_queque.pop();
-            security_dirs_name.unlock();
+            thread_active++;
+            auto_lock.unlock();
+            
             if(depth_it != token_group.options.end()){
               if(!entry.is_regular_file()){
                 for(auto entry_its = std::filesystem::recursive_directory_iterator(entry);
@@ -283,10 +288,11 @@ void COPY_HANLDER(const GroupToken& token_group){
                     security_entry_data.unlock();
                   }
                   else{
-                    security_dirs_name.lock();
-                    dirs_name_queque.push(entry_its);
-                    security_dirs_name.unlock();
-                  
+                    {
+                      std::lock_guard<std::mutex>lock(security_dirs_name);
+                      dirs_name_queque.push(entry_its);
+                    }
+                    condition.notify_all();
                     security_entry_data.lock();
                     extract_dirs_origin.emplace_back(entry_its);
                     security_entry_data.unlock();
@@ -299,6 +305,13 @@ void COPY_HANLDER(const GroupToken& token_group){
                 security_entry_data.unlock();
               }
             }
+            security_dirs_name.lock();
+            thread_active--;
+            if(thread_active == 0 && dirs_name_queque.empty()){
+              not_more_elements = true;
+            }
+            condition.notify_all();
+            security_dirs_name.unlock();
           }
       });
     }
@@ -321,8 +334,13 @@ void COPY_HANLDER(const GroupToken& token_group){
         });
   }
   else{
-    for(const auto& entry_its : std::filesystem::directory_iterator(origin_dirs)){
-      extract_dirs_origin.emplace_back(entry_its);
+    if(origin_dirs.is_regular_file()){
+      extract_dirs_origin.emplace_back(origin_dirs);
+    }
+    else{
+      for(const auto& entry_its : std::filesystem::directory_iterator(origin_dirs)){
+        extract_dirs_origin.emplace_back(entry_its);
+      }
     }
   }
 
