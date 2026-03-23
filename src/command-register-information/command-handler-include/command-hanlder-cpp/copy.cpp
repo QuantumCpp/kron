@@ -20,22 +20,21 @@ namespace {
 
     void dry_run(const std::vector<std::filesystem::directory_entry>& entries_origin, 
       const std::filesystem::directory_entry& destinatary_dirs, const std::filesystem::directory_entry& origin_dirs){
-      
       for(const auto& entry : entries_origin){
         std::filesystem::path path = destinatary_dirs.path() / std::filesystem::relative(entry.path(),origin_dirs); 
         if(std::filesystem::exists(path)){
           std::cout << std::format("[DRY-RUN] CONFLICT : {}\n", path.filename().string());
           continue;
         }
-        if(std::filesystem::is_directory(entry.path())){
+        if(entry.is_directory()){
           std::cout << std::format("[DRY-RUN] CREATE DIR : {}\n", path.filename().string());
           continue;
         }
-        if(std::filesystem::is_symlink(entry.path())){
+        if(entry.is_symlink()){
           std::cout << std::format("[DYR-RUN CREATE SYMLINK] : {}\n", path.filename().string());
           continue;
         }
-        if(std::filesystem::is_regular_file(entry.path())){
+        if(entry.is_regular_file()){
           std::cout << std::format("[DRY-RUN] COPY : {}\n", path.filename().string());
         }
       }
@@ -66,13 +65,14 @@ namespace {
     bool repeat = false;
 
     for(const auto& entry : entries_origin){
-      std::filesystem::path path = destinatary_dirs.path() /  std::filesystem::relative(entry.path(), origin_dirs.path());
-      if(collect_option.contains("--no-overwrite") && std::filesystem::exists(path)){
+      std::filesystem::path path(destinatary_dirs.path() /  std::filesystem::relative(entry.path(), origin_dirs.path()));
+      bool exist_path = entry.is_symlink() ? std::filesystem::exists(std::filesystem::symlink_status(path))  : std::filesystem::exists(path);
+      if(collect_option.contains("--no-overwrite") && exist_path){
         std::cout << std::format("[NO-OVERWRITE] {}\n", path.filename().string());
         continue;
       }
 
-        if(std::filesystem::exists(path) && !repeat && 
+        if(exist_path && !repeat && 
         (!collect_option.contains("--force") && !collect_option.contains("--skip-existing"))){
           int option = 0;
           while(option == 0){
@@ -118,7 +118,7 @@ namespace {
         std::filesystem::create_directories(parent_path);
       }
 
-      if(std::filesystem::is_directory(entry.path())){
+      if(entry.is_directory()){
         if(copy_option == std::filesystem::copy_options::skip_existing || 
             copy_option == std::filesystem::copy_options::overwrite_existing ||
             copy_option == std::filesystem::copy_options::none){
@@ -142,7 +142,7 @@ namespace {
           continue;
         }
       }
-      if(std::filesystem::is_symlink(entry.path())){
+      if(entry.is_symlink()){
         if(copy_option == std::filesystem::copy_options::skip_existing){
           if(collect_option.contains("--verbose")) 
           {
@@ -170,7 +170,7 @@ namespace {
         std::filesystem::copy_symlink(entry.path(),path);
         continue;
       } 
-      if(std::filesystem::is_regular_file(entry.path())){
+      if(entry.is_regular_file()){
           if(collect_option.contains("--verbose")) 
           {
             std::cout << std::format("[COPY FILE] : {}\n",path.filename().string() );
@@ -261,7 +261,7 @@ void COPY_HANLDER(const GroupToken& token_group){
             
             if(depth_it != token_group.options.end()){
               if(!entry.is_regular_file()){
-                for(auto entry_its = std::filesystem::recursive_directory_iterator(entry);
+                for(auto entry_its = std::filesystem::recursive_directory_iterator(entry, std::filesystem::directory_options::none);
                     entry_its != std::filesystem::recursive_directory_iterator();
                     ++entry_its)
                 {
@@ -319,18 +319,18 @@ void COPY_HANLDER(const GroupToken& token_group){
       its.join();
     }
     //ordenar elementos
-    std::vector<std::pair<ptrdiff_t, std::filesystem::directory_entry>> temp_sort;
+    std::vector<std::tuple<bool,ptrdiff_t, std::filesystem::directory_entry>> temp_sort;
     
     for(const auto& entry : extract_dirs_origin){
-      temp_sort.push_back({std::ranges::distance(entry.path().begin(), entry.path().end()), entry});
+      temp_sort.push_back({entry.is_symlink(),std::ranges::distance(entry.path().begin(), entry.path().end()), entry});
     }
     //ordenar elementos
     std::ranges::sort(temp_sort, [](const auto& a, const auto& b)
         {
-          return std::pair(a.first , a.second.path().filename()) < std::pair(b.first, b.second.path().filename());
+          return std::tuple(std::get<0>(a) , std::get<1>(a), std::get<2>(a)) < std::tuple(std::get<0>(b), std::get<1>(b), std::get<2>(b)) ;
         });
     std::ranges::transform(temp_sort, extract_dirs_origin.begin(), [](const auto& entry){
-        return entry.second;
+        return std::get<2>(entry);
         });
   }
   else{
