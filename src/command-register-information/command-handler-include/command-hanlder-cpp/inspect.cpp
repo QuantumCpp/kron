@@ -157,7 +157,7 @@ namespace {
     else {
       group*  gp = getgrgid(stat_path.st_gid);
       gp_name  = gp ? gp->gr_name : "UNKNOWN";
-      cache_group[stat_path.st_gid];
+      cache_group[stat_path.st_gid] = gp_name;
     }
     std::string name_cut = path.path().filename().string().size() > 30
       ? path.path().filename().string().substr(0, 20) + " ..." + path.path().extension().string()
