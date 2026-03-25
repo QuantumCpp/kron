@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <format>
 #include <iostream>
 #include <iterator>
@@ -13,15 +14,41 @@
 #include <mutex>
 #include <unordered_set>
 #include <vector>
+#include <sys/stat.h>
 
 const int MAX_THREAD = 9;
+
+enum class TypeEntry : uint8_t{
+  Directory = 0,
+  File = 1,
+  SymLink = 2,
+};
+
+struct DirID {
+  dev_t device;
+  ino_t inode;
+  bool operator==(const DirID& other) const noexcept {
+    return device == other.device && inode == other.inode;
+  }
+};
+
+namespace std {
+  template <>
+  struct hash<DirID> {
+    size_t operator()(const DirID& id) const noexcept {
+      size_t h1 = std::hash<dev_t>{}(id.device);
+      size_t h2 = std::hash<ino_t>{}(id.inode);
+      return h1 ^ (h2 << 1);
+    }
+  };
+}
 
 namespace {
 
     void dry_run(const std::vector<std::filesystem::directory_entry>& entries_origin, 
       const std::filesystem::directory_entry& destinatary_dirs, const std::filesystem::directory_entry& origin_dirs){
       for(const auto& entry : entries_origin){
-        std::filesystem::path path = destinatary_dirs.path() / std::filesystem::relative(entry.path(),origin_dirs); 
+        std::filesystem::path path = destinatary_dirs.path() / entry.path().lexically_relative(origin_dirs); 
         if(std::filesystem::exists(path)){
           std::cout << std::format("[DRY-RUN] CONFLICT : {}\n", path.filename().string());
           continue;
@@ -31,7 +58,7 @@ namespace {
           continue;
         }
         if(entry.is_symlink()){
-          std::cout << std::format("[DYR-RUN CREATE SYMLINK] : {}\n", path.filename().string());
+          std::cout << std::format("[DRY-RUN CREATE SYMLINK] : {}\n", path.filename().string());
           continue;
         }
         if(entry.is_regular_file()){
@@ -65,7 +92,7 @@ namespace {
     bool repeat = false;
 
     for(const auto& entry : entries_origin){
-      std::filesystem::path path(destinatary_dirs.path() /  std::filesystem::relative(entry.path(), origin_dirs.path()));
+      std::filesystem::path path(destinatary_dirs.path() /  entry.path().lexically_relative(origin_dirs));
       bool exist_path = entry.is_symlink() ? std::filesystem::exists(std::filesystem::symlink_status(path))  : std::filesystem::exists(path);
       if(collect_option.contains("--no-overwrite") && exist_path){
         std::cout << std::format("[NO-OVERWRITE] {}\n", path.filename().string());
@@ -186,6 +213,8 @@ void COPY_HANLDER(const GroupToken& token_group){
   std::filesystem::directory_entry origin_dirs = std::filesystem::directory_entry(token_group.positional.front().name);
   std::filesystem::directory_entry destinatary_dirs = std::filesystem::directory_entry(token_group.positional.back().name);
   std::vector<std::filesystem::directory_entry> extract_dirs_origin;
+  std::unordered_set<DirID> visited;
+
 
   auto depth_it = std::ranges::find_if(token_group.options, [](const auto& token){
       return token.name == "--depth"; 
@@ -234,20 +263,19 @@ void COPY_HANLDER(const GroupToken& token_group){
   }
 
   dirs_name_queque.emplace(origin_dirs);
-  std::vector<std::filesystem::directory_entry> dirs_entry;
   std::mutex security_dirs_name;
   std::mutex security_entry_data;
   std::vector<std::thread> threads;
   std::condition_variable condition;
-  bool not_more_elements = false;
-  int thread_active = 0;
+  std::atomic<bool> not_more_elements = false;
+  size_t  thread_active = 0;
 
   threads.reserve(MAX_THREAD);
   if(collect_option.contains("--recursive")){
     for(size_t i = 0 ; i < MAX_THREAD ; i++ ){
       threads.emplace_back([&]{
 
-
+        try{
         while(!not_more_elements){
             std::unique_lock<std::mutex> auto_lock(security_dirs_name);
             condition.wait(auto_lock, [&]{return !dirs_name_queque.empty() || not_more_elements;} );
@@ -266,26 +294,42 @@ void COPY_HANLDER(const GroupToken& token_group){
                     ++entry_its)
                 {
                   if(entry_its.depth() <= depth_value ){
-                    security_entry_data.lock();
-                    extract_dirs_origin.push_back(*entry_its);
-                    security_entry_data.unlock();
-                  
+                    struct stat s;
+                    if(lstat(entry_its->path().c_str(), &s) == 0){
+                      DirID id{ .device = s.st_dev, .inode = s.st_ino };
+                        {
+                          std::lock_guard lock(security_entry_data);
+                          if(!visited.contains(id)){
+                            extract_dirs_origin.push_back(*entry_its);
+                            visited.insert(id);
+                          }
+                        }
+                    }
                   }
                 }
               }
               else{
-                security_entry_data.lock();
-                extract_dirs_origin.push_back(entry);
-                security_entry_data.unlock();
+                {
+                  std::lock_guard lock(security_entry_data);
+                  extract_dirs_origin.push_back(entry);
+                }
               }
             }
             else{
               if(!entry.is_regular_file()){
                 for(const auto& entry_its : std::filesystem::directory_iterator(entry)){
                   if(!entry_its.is_directory()){
-                    security_entry_data.lock();
-                    extract_dirs_origin.emplace_back(entry_its);
-                    security_entry_data.unlock();
+                    struct stat s;
+                    if(lstat(entry_its.path().c_str(), &s) == 0){
+                      DirID id{ .device = s.st_dev, .inode = s.st_ino };
+                      {
+                        std::lock_guard lock(security_entry_data);
+                        if(!visited.contains(id)){
+                          extract_dirs_origin.emplace_back(entry_its);
+                          visited.insert(id);
+                        }
+                      }
+                    }
                   }
                   else{
                     {
@@ -293,41 +337,80 @@ void COPY_HANLDER(const GroupToken& token_group){
                       dirs_name_queque.push(entry_its);
                     }
                     condition.notify_all();
-                    security_entry_data.lock();
-                    extract_dirs_origin.emplace_back(entry_its);
-                    security_entry_data.unlock();
+                    {
+                      // FIX: lógica estaba invertida — registrar si NO está en visited,
+                      // igual que la rama de no-directorios. Antes decía contains(id)
+                      // como condición para insertar, así que nunca grababa nada
+                      // (ningún directorio puede estar en visited antes de ser procesado).
+                      struct stat s;
+                      if(lstat(entry_its.path().c_str(), &s) == 0){
+                        DirID id = {.device = s.st_dev , .inode = s.st_ino};
+                        std::lock_guard lock(security_entry_data);
+                        if(!visited.contains(id)){
+                          extract_dirs_origin.emplace_back(entry_its);
+                          visited.insert(id);
+                        }
+                      }
+                    }
                   }
                 }
               }
               else{
-                security_entry_data.lock();
-                extract_dirs_origin.push_back(entry);
-                security_entry_data.unlock();
+                {
+                  std::lock_guard lock(security_entry_data);
+                  extract_dirs_origin.push_back(entry);
+                }
               }
             }
-            security_dirs_name.lock();
-            thread_active--;
-            if(thread_active == 0 && dirs_name_queque.empty()){
-              not_more_elements = true;
+            {
+            std::lock_guard lock(security_dirs_name);
+              thread_active--;
+              if(thread_active == 0 && dirs_name_queque.empty()){
+                not_more_elements = true;
+              }
             }
             condition.notify_all();
-            security_dirs_name.unlock();
           }
+        }catch(std::filesystem::filesystem_error& e){
+            {
+              std::lock_guard lock(security_dirs_name);
+              thread_active--;
+              if(thread_active == 0 && dirs_name_queque.empty()){
+                not_more_elements = true;
+              }
+            }
+            std::cerr << std::format("[ERROR] {}\n", e.what());
+            condition.notify_all();
+        }
       });
     }
     for(auto& its : threads){
       its.join();
     }
     //ordenar elementos
-    std::vector<std::tuple<bool,ptrdiff_t, std::filesystem::directory_entry>> temp_sort;
+    std::vector<std::tuple<TypeEntry,ptrdiff_t, std::filesystem::directory_entry>> temp_sort;
     
     for(const auto& entry : extract_dirs_origin){
-      temp_sort.push_back({entry.is_symlink(),std::ranges::distance(entry.path().begin(), entry.path().end()), entry});
+      TypeEntry entry_type;
+      // FIX: is_symlink() antes que is_directory(). Un symlink a directorio
+      // devuelve true para ambos predicados; clasificarlo como Directory lo
+      // ordena con valor 0 y se crea antes que los directorios reales que
+      // necesita como destino, causando ENOENT o ELOOP.
+      if(entry.is_symlink()){
+        entry_type = TypeEntry::SymLink;
+      }
+      else if(entry.is_directory()){
+        entry_type = TypeEntry::Directory;
+      }
+      else{
+        entry_type = TypeEntry::File;
+      }
+      temp_sort.push_back({entry_type,std::ranges::distance(entry.path().begin(), entry.path().end()), entry});
     }
     //ordenar elementos
     std::ranges::sort(temp_sort, [](const auto& a, const auto& b)
         {
-          return std::tuple(std::get<0>(a) , std::get<1>(a), std::get<2>(a)) < std::tuple(std::get<0>(b), std::get<1>(b), std::get<2>(b)) ;
+          return std::tuple(std::get<0>(a) , std::get<1>(a), std::get<2>(a).path().filename()) < std::tuple(std::get<0>(b), std::get<1>(b), std::get<2>(b).path().filename()) ;
         });
     std::ranges::transform(temp_sort, extract_dirs_origin.begin(), [](const auto& entry){
         return std::get<2>(entry);
@@ -365,5 +448,3 @@ void COPY_HANLDER(const GroupToken& token_group){
 
   copy_dir_process(extract_dirs_origin, destinatary_dirs, origin_dirs,collect_option);
 }
-
-
