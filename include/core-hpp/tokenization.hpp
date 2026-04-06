@@ -1,3 +1,4 @@
+#pragma once
 #include "../token/token-raw-metadata.hpp"
 #include <string>
 #include <vector>

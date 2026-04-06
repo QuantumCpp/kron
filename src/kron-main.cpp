@@ -1,11 +1,11 @@
-#include "command/command-implementation.hpp"
+#include "../include/command/command-implementation.hpp"
 #include "../include/option/option-implementation.hpp"
 #include "../include/core-hpp/tokenization.hpp"
 #include "../include/core-hpp/parsing.hpp"
 #include "../include/core-hpp/validator.hpp"
-#include "core-hpp/executor.hpp"
-#include "special-option/help-option.hpp"
-#include "token/group-token.hpp"
+#include "../include/core-hpp/executor.hpp"
+#include "../include/special-option/help-option.hpp"
+#include "../include/token/group-token.hpp"
 #include <string>
 #include <vector>
 

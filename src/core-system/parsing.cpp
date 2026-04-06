@@ -1,8 +1,8 @@
-#include "../include/core-hpp/parsing.hpp"
-#include "command/command-implementation.hpp"
-#include "option/option-implementation.hpp"
-#include "option/option-raw-metadata.hpp"
-#include "token/token-raw-metadata.hpp"
+#include "../../include/core-hpp/parsing.hpp"
+#include "../../include/command/command-implementation.hpp"
+#include "../../include/option/option-implementation.hpp"
+#include "../../include/option/option-raw-metadata.hpp"
+#include "../../include/token/token-raw-metadata.hpp"
 #include "../../include/error/error_hanlder.hpp"
 #include <cstddef>
 #include <string>

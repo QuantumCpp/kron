@@ -1,6 +1,6 @@
 #include "../../include/option/option-raw-metadata.hpp"
 #include "../../include/option/option-implementation.hpp"
-#include "special-option/version-option.hpp"
+#include "../../include/special-option/version-option.hpp"
 #include <algorithm>
 #include <any>
 #include <cctype>

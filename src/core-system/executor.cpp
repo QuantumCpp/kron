@@ -1,8 +1,8 @@
-#include "../include/core-hpp/executor.hpp"
-#include "../include/token/group-token.hpp"
-#include "../include/command/command-implementation.hpp"
+#include "../../include/core-hpp/executor.hpp"
+#include "../../include/token/group-token.hpp"
+#include "../../include/command/command-implementation.hpp"
 #include "../../include/special-option/help-option.hpp"
-#include "token/token-raw-metadata.hpp"
+#include "../../include/token/token-raw-metadata.hpp"
 #include <algorithm>
 
 void executor(const GroupToken& token_group){
