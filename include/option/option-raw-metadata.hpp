@@ -45,8 +45,40 @@ enum class OptionCategory : std::uint8_t{
 
 // COLLECTION + FILTERING + SORTING
 // Todas las opciones que operan sobre el listado de entradas del filesystem
+  struct HealthFlag {
+    std::string code;        // "symlink_broken", "world_writable", etc.
+    int         level;       // 1=info, 2=medium, 3=high
+  };
+
+struct FileEntry {
+    // 1. Metadatos de POSIX (Tipos primitivos primero para mejor alineación)
+    ino_t     inode;          // 8 bytes
+    uint64_t  size;           // 8 bytes
+    mode_t    mode;           // 4 bytes
+    nlink_t   nlinks;         // 8 bytes (en x86_64)
+    uid_t     uid;            // 4 bytes (NUEVO: Almacena el ID, no el nombre)
+    gid_t     gid;            // 4 bytes (NUEVO: Almacena el ID, no el nombre)
+    
+    // 2. Flags de estado (Bitfields para ahorrar espacio)
+    bool is_directory    : 1;
+    bool is_symlink      : 1;
+    bool symlink_broken  : 1;
+    bool has_capabilities: 1;
+
+    // 3. Tiempos (Usar time_t directamente)
+    time_t mtime;             // 8 bytes (Fecha modificación)
+    time_t btime;             // 8 bytes (Fecha creación, solo en algunos FS/Kernel)
+
+    // 4. Strings y Contenedores (Al final, son los más pesados)
+    std::string             name;
+    std::string             path;
+    std::string             symlink_target;
+    std::string             extension;
+    std::vector<HealthFlag> health;
+};
+
 struct FilterStruct{
-  std::vector<std::filesystem::directory_entry> entries;
+  std::vector<FileEntry>& entries;
   std::any context;  // dato extra variable: glob, criterio de sort, profundidad, fecha, tamaño
 };
 
@@ -107,7 +139,7 @@ struct OptionMetaData{
   std::string alias_name;
   std::vector<std::string> conflict_name;
   std::vector<std::string> requieres_name = {};
-  TypeDataReceived data_type;
+  TypeDataReceived data_type = TypeDataReceived::NONE;
   OptionCategory category;
   OptionHandler hanlder;
 };

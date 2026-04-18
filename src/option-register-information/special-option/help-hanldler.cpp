@@ -2,6 +2,7 @@
 #include <string>
 #include <format>
 #include <iostream>
+#include <string_view>
 
 // ─── Column widths ────────────────────────────────────────────────────────────
 // OPT  : option name  (--long-option-name)
@@ -18,12 +19,12 @@ namespace {
 
 // ─── Helpers de formato ───────────────────────────────────────────────────────
 
-void print_section(const std::string& title) {
+void print_section(std::string_view title) {
     std::cout << std::format("\n{}\n{}\n", title, std::string(title.size(), '-'));
 }
 
-void print_row(const std::string& opt, const std::string& alias,
-               const std::string& type, const std::string& desc) {
+void print_row(std::string_view opt, std::string_view alias,
+               std::string_view type,std::string_view desc) {
     std::cout << std::format("  {:<{}} {:<{}} {:<{}} {}\n",
         opt,   W_OPT,
         alias, W_ALIAS,
@@ -736,8 +737,8 @@ void help_decrypt() {
 
 // ─── HANDLER ──────────────────────────────────────────────────────────────────
 
-void HELP_HANDLER(const std::string& option_help) {
-    if (option_help == std::string("empty")) {
+void HELP_HANDLER(std::string_view option_help) {
+    if (option_help == "empty") {
         help_global_flags();
         help_list();
         help_inspect();

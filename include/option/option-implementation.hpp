@@ -3,4 +3,4 @@
 
 void CreatedOptionData();
 void GeneralOptionLog(const OptionMetaData& option);
-const OptionMetaData* GetOptionData(const std::string& name_option);
+const OptionMetaData* GetOptionData(std::string_view name_option);

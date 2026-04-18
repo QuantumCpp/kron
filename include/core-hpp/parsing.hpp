@@ -1,5 +1,5 @@
 #pragma once
-#include "../command/command-raw-metadata.hpp"
+#include "../token/group-token.hpp"
 #include "../token/token-raw-metadata.hpp"
 #include <vector>
 

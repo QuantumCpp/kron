@@ -1,5 +1,5 @@
 #pragma once
-#include <string>
+#include <string_view>
 
-void HELP_HANDLER(const std::string& option_help);
+void HELP_HANDLER(std::string_view option_help);
 

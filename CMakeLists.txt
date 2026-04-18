@@ -40,9 +40,15 @@ target_include_directories(kron PRIVATE
     ${PROJECT_SOURCE_DIR}/include
 )
 
-target_compile_definitions(kron PRIVATE
-    KRON_VERSION="${PROJECT_VERSION}"
+configure_file(
+    "${PROJECT_SOURCE_DIR}/include/special-option/version-option.hpp"
+    "${PROJECT_BINARY_DIR}/generated/version-option.hpp"
 )
+
+target_include_directories(kron PRIVATE 
+    "${PROJECT_BINARY_DIR}/generated"
+)
+
 
 install(TARGETS kron
     RUNTIME DESTINATION bin

@@ -3,166 +3,328 @@
 #include "../../../../include/option/option-implementation.hpp"
 #include "../../../../include/token/token-raw-metadata.hpp"
 #include <algorithm>
-#include <array>
-#include <chrono>
-#include <cstddef>
-#include <ctime>
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <format>
 #include <iostream>
-#include <ranges>
+#include <iterator>
+#include <limits>
+#include <linux/stat.h>
+#include <mutex>
+#include <queue>
 #include <string>
+#include <string_view>
 #include <sys/types.h>
-#include <variant>
+#include <thread>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <grp.h>
+#include <dirent.h>
+#include <type_traits>
+#include <unordered_map>
+#include <variant>
 
 namespace {
-  std::string string_perms(const std::filesystem::path& path){
-    std::filesystem::perms p = std::filesystem::status(path).permissions();
-    auto check = [&](std::filesystem::perms bit, char c){
-      return (p & bit) != std::filesystem::perms::none ? c : '-';
+    constexpr unsigned int MAX_THREAD = 10;
+    static std::unordered_map<uid_t,std::string> cache_owner;
+    static std::unordered_map<gid_t, std::string> cache_group;
+
+    struct Option {
+        bool recursive : 1;
+        bool all : 1;
+        bool long_format : 1;
+        bool no_header_format : 1;
+        bool follow_symlink : 1;
+        bool capabilities : 1;
     };
-    std::string str;
-    str += check(std::filesystem::perms::owner_read,   'r');
-    str += check(std::filesystem::perms::owner_write,  'w');
-    str += check(std::filesystem::perms::owner_exec,   'x');
-    str += check(std::filesystem::perms::group_read,   'r');
-    str += check(std::filesystem::perms::group_write,  'w');
-    str += check(std::filesystem::perms::group_exec,   'x');
-    str += check(std::filesystem::perms::others_read,  'r');
-    str += check(std::filesystem::perms::others_write, 'w');
-    str += check(std::filesystem::perms::others_exec,  'x');
-    return str;
-  }
 
-  std::string size_parse(const off_t& size){
-    const std::array<std::string, 5> units = {"B", "KB", "MB", "GB", "TB"};
-    size_t iteration = 0;
-    auto s = static_cast<double>(size);
-    while(s >= 1024 && iteration < 4){
-      s = s / 1024;
-      iteration++;
-    }
-    return std::format("{:.2f}{}", s, units[iteration]);
-  }
+    struct PendingDir {
+        std::string path; // Debe ser string para ser dueño de la memoria en la cola
+        int depth;
+    };
 
-  std::string date_parse(const std::filesystem::file_time_type& raw_date){
-    auto sys = std::chrono::clock_cast<std::chrono::system_clock>(raw_date);
-    std::time_t t = std::chrono::system_clock::to_time_t(sys);
-    std::tm* tm = std::localtime(&t);
-    std::array<char,64> buffer;
-    std::strftime(buffer.data(), sizeof(buffer.data()), "%Y-%m-%d", tm);
-    return buffer.data();
-  }
+    void NormalRecolection(FileEntry& fe, std::string_view current_path, dirent* entry) {
+        fe.inode = entry->d_ino;
+        fe.size = std::numeric_limits<uint64_t>::max(); 
+        fe.nlinks = 0;
+        fe.mode = 0;
+        fe.uid = 0;
+        fe.gid = 0;
+        fe.mtime = 0;
+        fe.btime = 0;
 
-  size_t width_dynamic(const std::vector<std::filesystem::directory_entry>& entry_path){
-    if(entry_path.empty()) {return 20;}
-    auto size_entry = entry_path | std::views::transform([](const auto& e){
-        return e.path().filename().string().size();
-    });
-    return *std::ranges::max_element(size_entry);
-  }
+        fe.is_directory = (entry->d_type == DT_DIR);
+        fe.is_symlink = (entry->d_type == DT_LNK);
+        fe.symlink_broken = false;
+        fe.has_capabilities = false;
 
-  void PrintInformation(const bool& long_format, const bool& no_header_format,
-      const std::vector<std::filesystem::directory_entry>& file_entry)
-  {
-    if(!long_format){
-      for(const auto& entry : file_entry){
-        std::cout << std::format("{}\n",
-            entry.path().filename().string() + (entry.is_directory() ? "/" : ""));
-      }
-      return;
+        fe.name = entry->d_name;
+        fe.path = current_path; 
+        
+        fe.symlink_target.clear();
+        fe.extension.clear();
+        if (!fe.health.empty()){ fe.health.clear();}
+        
+        std::string_view name_view(entry->d_name);
+        if (size_t dot_pos = name_view.find_last_of('.'); dot_pos != std::string_view::npos && dot_pos > 0) {
+            fe.extension = std::string(name_view.substr(dot_pos));
+        }
     }
 
-    size_t size_width = width_dynamic(file_entry) + 5;
-    if(!no_header_format){
-      std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<{}} {:<8} {:<8} {:<20}\n",
-          "PERMISOS", "INODE", "GRUPO", "PROPIETARIO",
-          "NOMBRE", size_width,
-          "TIPO", "TAMANO", "FECHA DE MODIFICACION");
+    void LongRecolection(FileEntry& fe, const std::string& full_path, dirent* entry, std::string_view current_path) {
+        struct statx stx;
+        unsigned int mask = STATX_BASIC_STATS | STATX_BTIME;
+
+        // full_path ya viene construido del loop principal para evitar doble format
+        if (statx(AT_FDCWD, full_path.c_str(), AT_SYMLINK_NOFOLLOW | AT_STATX_DONT_SYNC, mask, &stx) == 0) {
+            fe.inode = stx.stx_ino;
+            fe.size = stx.stx_size;
+            fe.nlinks = stx.stx_nlink;
+            fe.mode = stx.stx_mode;
+            fe.uid = stx.stx_uid;
+            fe.gid = stx.stx_gid;
+            fe.mtime = stx.stx_mtime.tv_sec;
+            
+            fe.btime = (stx.stx_mask & STATX_BTIME) ? stx.stx_btime.tv_sec : 0;
+
+            fe.is_directory = S_ISDIR(stx.stx_mode);
+            fe.is_symlink = S_ISLNK(stx.stx_mode);
+            fe.symlink_broken = false;
+            fe.has_capabilities = false;
+
+            fe.name = entry->d_name;
+            fe.path = current_path;
+            
+            fe.symlink_target.clear();
+            fe.extension.clear();
+            if (!fe.health.empty()) {fe.health.clear();}
+
+            std::string_view name_view(fe.name);
+            if (size_t dot_pos = name_view.find_last_of('.'); dot_pos != std::string_view::npos && dot_pos > 0) {
+                fe.extension = std::string(name_view.substr(dot_pos));
+            }
+        }
     }
 
-    for(const auto& path : file_entry){
-      std::string type      = path.is_directory() ? "DIR" : "FIL";
-      const auto perms_path = string_perms(path);
-      struct stat stat_path;
-      if(stat(path.path().c_str(), &stat_path) == 0){
-        const auto size_path = path.is_directory()
-            ? std::string("—")
-            : size_parse(stat_path.st_size);
-        passwd* pw = getpwuid(stat_path.st_uid);
-        group*  gp = getgrgid(stat_path.st_gid);
-        std::string gp_name = gp ? gp->gr_name : "UNKNOWN";
-        std::string pw_name = pw ? pw->pw_name : "UNKNOWN";
-        auto date_path = date_parse(path.last_write_time());
-        std::cout << std::format("{:<10} {:<10} {:<10} {:<12} {:<{}} {:<8} {:<8} {:<8}\n",
-            perms_path,
-            stat_path.st_ino,
-            gp_name,
-            pw_name,
-            path.path().filename().string() + (path.is_directory() ? "/" : ""), size_width,
-            type,
-            size_path,
-            date_path);
-      }
+  void NormalPrinter(const std::vector<FileEntry>& entries) {
+    if (entries.empty()){ return;}
+
+    size_t max_name = 0;
+    for (const auto& e : entries) {
+        max_name = std::max(max_name, e.name.length());
+    }
+
+    size_t col_width = max_name + 2;
+    size_t cols = std::max(1UL, 80 / col_width);
+
+    for (size_t i = 0; i < entries.size(); ++i) {
+        if (entries[i].is_directory) {
+            std::cout << std::format("\033[1;34m{:<{}}\033[0m", entries[i].name, col_width);
+        } else {
+            std::cout << std::format("{:<{}}", entries[i].name, col_width);
+        }
+        
+        if ((i + 1) % cols == 0) {std::cout << "\n";}
+    }
+    std::cout << "\n";
+  }
+
+  void LongPrinter(const std::vector<FileEntry>& entries) {
+    if (entries.empty()) {return;}
+
+    // Encabezado (si no se activó --no-header)
+    std::cout << std::format("{:<10} {:<3} {:<8} {:<8} {:<10} {:<12} {}\n", 
+                             "PERMS", "LNK", "OWNER", "GROUP", "SIZE", "MODIFIED", "NAME");
+    std::cout << std::string(80, '-') << "\n";
+
+    for (const auto& e : entries) {
+        // 1. Permisos (Modo)
+        std::string perms = e.is_directory ? "d" : (e.is_symlink ? "l" : "-");
+        perms += (e.mode & S_IRUSR) ? "r" : "-";
+        perms += (e.mode & S_IWUSR) ? "w" : "-";
+        perms += (e.mode & S_IXUSR) ? "x" : "-";
+
+        // ... podrías expandir para grupo y otros ...
+        std::string owner;
+        std::string group_str;
+        if(cache_owner.contains(e.uid)){
+          owner = cache_owner.at(e.uid);
+        }
+        else{
+          passwd* pw = getpwuid(e.uid);
+          owner  = pw ? pw->pw_name : "UNKNOWN";
+          cache_owner[e.uid] = owner;
+        }
+
+        if(cache_group.contains(e.gid)){
+          group_str = cache_group.at(e.gid);
+        }
+        else {
+          group*  gp = getgrgid(e.gid);
+          group_str  = gp ? gp->gr_name : "UNKNOWN";
+          cache_group[e.gid] = group_str;
+        }
+
+        // 3. Tiempo
+        std::string time_str = std::format("{:%b %d %H:%M}", std::chrono::system_clock::from_time_t(e.mtime));
+        // 4. Tamaño (Manejo del valor centinela MAX que definimos)
+        std::string size_str = (e.size == std::numeric_limits<uint64_t>::max()) ? 
+                                "-" : std::to_string(e.size);
+
+        // Renderizado Final
+        std::cout << std::format("{:<10} {:<3} {:<8} {:<8} {:<10} {:<12} ", 
+                                 perms, e.nlinks, owner, group_str, size_str, time_str);
+        
+        // Color para el nombre si es directorio
+        if (e.is_directory) {std::cout << "\033[1;34m" << e.name << "\033[0m\n";}
+        else {std::cout << e.name << "\n";}
     }
   }
 }
 
-void LIST_HANDLER(const GroupToken& token_group){
-  std::vector<std::filesystem::directory_entry> file_entry;
-  std::filesystem::path path_entry = std::filesystem::current_path();
+void LIST_HANDLER(const GroupToken& token_group) {
+    std::vector<FileEntry> file_entry;
+    std::queue<PendingDir> pending_dirs;
 
-  if(!token_group.positional.empty()){
-    path_entry = token_group.positional.front().name;
-  }
+    Option options_bool = {
+        .recursive = std::ranges::any_of(token_group.options, [](const auto& t){ return t.name == "--recursive"; }),
+        .all = std::ranges::any_of(token_group.options, [](const auto& t){ return t.name == "--all"; }),
+        .long_format = std::ranges::any_of(token_group.options, [](const auto& t){ return t.name == "--long"; }),
+        .no_header_format = std::ranges::any_of(token_group.options, [](const auto& t){ return t.name == "--no-header"; }),
+        .follow_symlink = std::ranges::any_of(token_group.options, [](const auto& t){ return t.name == "--follow-symlink"; }),
+        .capabilities = std::ranges::any_of(token_group.options, [](const auto& t){ return t.name == "--capabilities"; })
+    };
 
-  if(!std::filesystem::exists(path_entry)){
-    std::cerr << std::format("ERROR : {} NO EXISTE O NO ES UN DIRECTORIO VALIDO\n",
-        path_entry.string());
-    return;
-  }
-
-  bool all_format = std::ranges::any_of(token_group.options, [](const Token& t){
-      return t.name == "--all";
-  });
-
-  for(const auto& entry : std::filesystem::directory_iterator(path_entry)){
-    if(!all_format && entry.path().filename().string().starts_with('.')){
-      continue;
+    int depth_limit = 0;
+    auto it = std::ranges::find_if(token_group.options, [](const auto& t){ return t.name == "--depth"; });
+    if (it != token_group.options.end()) {
+        if (!it->value.empty()) {depth_limit = std::stoi(std::string(it->value));}
     }
-    file_entry.emplace_back(entry);
-  }
-
-  bool long_format      = false;
-  bool no_header_format = false;
-
-  for(const auto& option : token_group.options){
-    const auto& option_data = GetOptionData(option.name);
-
-    if(option_data->category == OptionCategory::COLLECTION) {continue;}
-
-    if(option_data->category == OptionCategory::FILTERING ||
-       option_data->category == OptionCategory::SORTING){
-      FilterStruct fs;
-      fs.entries = file_entry;
-      fs.context = option.value;
-      std::visit([&](auto& handler){
-          using T = std::decay_t<decltype(handler)>;
-          if constexpr(std::is_same_v<T, FilteringProcess>){
-            handler(fs);
-          }
-      }, option_data->hanlder);
-      file_entry = fs.entries;
-      continue;
+    if(options_bool.recursive && it == token_group.options.end()){
+      depth_limit = std::numeric_limits<int>::max(); 
     }
 
-    if(option_data->category == OptionCategory::PRESENTATION){
-      if(option_data->normalized_name == "--long")      {long_format      = true;}
-      if(option_data->normalized_name == "--no-header") {no_header_format = true;}
+    std::string start_path = token_group.positional.empty() ? "." : std::string(token_group.positional.front().name);
+
+    if (!std::filesystem::exists(start_path)) {
+        std::cerr << std::format("ERROR: {} NO EXISTE\n", start_path);
+        return;
     }
+    
+    pending_dirs.push({.path = start_path, .depth = 0});
+
+    unsigned int used_thread = std::min(std::thread::hardware_concurrency() == 0 ? 1 : std::thread::hardware_concurrency(), MAX_THREAD);
+    std::mutex write_dirs_queue;
+    std::mutex write_dirs_vector;
+    std::vector<std::jthread> threads;
+    std::condition_variable condition;
+    std::atomic<int> working_threads = 0;
+    std::atomic<bool> root_submitted = false;
+
+    threads.reserve(used_thread);
+    for (size_t i = 0; i < used_thread; i++) {
+        threads.emplace_back([&, options_bool, depth_limit](std::stop_token stop) {
+            std::vector<FileEntry> file_entry_temp;
+            std::vector<PendingDir> temp_pending_dir;
+
+            while (!stop.stop_requested()) {
+                PendingDir current;
+                {
+                    std::unique_lock<std::mutex> lock(write_dirs_queue);
+                    condition.wait(lock, [&]{ 
+                        return !pending_dirs.empty() || stop.stop_requested() || (root_submitted && working_threads == 0); 
+                    });
+
+                    if (stop.stop_requested() || (working_threads == 0 && pending_dirs.empty())) {return;}
+                    if (pending_dirs.empty()) {
+                      continue;
+                    }
+
+                    current = std::move(pending_dirs.front());
+                    pending_dirs.pop();
+                    working_threads++;
+                }
+
+                DIR* dir_ptr = opendir(current.path.c_str());
+                if (!dir_ptr) {
+                    working_threads--;
+                    condition.notify_all();
+                    continue;
+                }
+
+                struct dirent *entry;
+                while ((entry = readdir(dir_ptr)) != nullptr) {
+                    std::string_view name(entry->d_name);
+                    if (name == "." || name == "..") {continue;}
+                    if (!options_bool.all && name.starts_with('.')) {continue;}
+
+                    std::string full_path = std::format("{}/{}", current.path, name);
+
+                    if (entry->d_type == DT_DIR && options_bool.recursive && current.depth < depth_limit) {
+                        temp_pending_dir.push_back({.path = full_path, .depth = current.depth + 1});
+                    }
+
+                    FileEntry entry_data;
+                    if (!options_bool.long_format) {
+                        NormalRecolection(entry_data, current.path, entry);
+                    } else {
+                        LongRecolection(entry_data, full_path, entry, current.path);
+                    }
+                    file_entry_temp.push_back(std::move(entry_data));
+                }
+                closedir(dir_ptr);
+
+                // Transferencia masiva a cola global
+                if (!temp_pending_dir.empty()) {
+                    std::lock_guard<std::mutex> lock(write_dirs_queue);
+                    for (auto& d : temp_pending_dir) {pending_dirs.push(d);}
+                    temp_pending_dir.clear();
+                }
+
+                // Transferencia masiva a vector global
+                if (!file_entry_temp.empty()) {
+                    std::lock_guard<std::mutex> lock(write_dirs_vector);
+                    file_entry.insert(file_entry.end(), 
+                                      std::make_move_iterator(file_entry_temp.begin()), 
+                                      std::make_move_iterator(file_entry_temp.end()));
+                    file_entry_temp.clear();
+                }
+
+                working_threads--;
+                condition.notify_all();
+            }
+        });
+    }
+
+    root_submitted = true;
+    condition.notify_all();
+    threads.clear();
+    //-----------------------------------------------------------------------------------------
+   auto run_pipeline = [&](OptionCategory target_cat) {
+        for(const auto& opt : token_group.options) {
+            auto metadata = GetOptionData(opt.name);
+            if(metadata && metadata->category == target_cat) {
+                FilterStruct fs{ .entries = file_entry, .context = opt.value };
+                std::visit([&](auto& handler) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(handler)>, FilteringProcess>) {
+                        handler(fs);
+                    }
+                }, metadata->hanlder);
+            }
+        }
+   };
+
+  run_pipeline(OptionCategory::FILTERING);
+  run_pipeline(OptionCategory::SORTING);
+  
+  if(options_bool.long_format == true){
+    LongPrinter(file_entry);
   }
-  PrintInformation(long_format, no_header_format, file_entry);
+  else{
+    NormalPrinter(file_entry);
+  }
 }

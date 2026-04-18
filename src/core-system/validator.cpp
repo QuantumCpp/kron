@@ -19,8 +19,8 @@
 #include <sstream>
 
 namespace {
-  bool DATE_VALIDATED(const std::string& date_str){
-    std::istringstream str_validated(date_str);
+  bool DATE_VALIDATED(const std::string_view& date_str){
+    std::istringstream str_validated(std::string{date_str});
     std::chrono::sys_days parser_date;
 
     str_validated >> std::chrono::parse("%F", parser_date);
@@ -124,7 +124,7 @@ bool ValidationGroupToken(GroupToken& group_raw){
   }
 
 
-  std::unordered_set<std::string> option_for_command;
+  std::unordered_set<std::string_view> option_for_command;
   option_for_command.reserve(data_command->option_avaible.size());
 
   for(const auto& option : data_command->option_avaible){
@@ -132,7 +132,7 @@ bool ValidationGroupToken(GroupToken& group_raw){
   }
  
   //Eliminar opciones duplicadas (sera valida solo la primera opcion introducida)
-  std::unordered_set<std::string> eliminated_duplicated_option;
+  std::unordered_set<std::string_view> eliminated_duplicated_option;
   eliminated_duplicated_option.reserve(group_raw.options.size());
   std::vector<Token> option_not_duplicated;
   option_not_duplicated.reserve(group_raw.options.size());

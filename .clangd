@@ -1,135 +1,72 @@
 # ============================================================================
 # kron — Configuración de clangd
-# .clangd
-# ============================================================================
-# Configura el LSP clangd para nvim con análisis óptimo del proyecto
-# Requiere: clangd 12+
+# .clangd corregido para C++20
 # ============================================================================
 
-# ----------------------------------------------------------------------------
-# Base de compilación
-# ----------------------------------------------------------------------------
-# clangd busca compile_commands.json en estos directorios
 CompileFlags:
   # Directorio de build donde CMake genera compile_commands.json
   CompilationDatabase: build/
   
-  # Flags adicionales que aplican a todos los archivos
+  # Flags de compilación para el análisis estático
   Add:
-    # C++20 (redundante si está en compile_commands.json, pero explícito)
     - "-std=c++20"
-    
-    # Directorios de include (ajusta si cambias la estructura)
     - "-Iinclude"
-    
-    # Warnings que quieres que clangd reporte en tiempo real
     - "-Wall"
     - "-Wextra"
     - "-Wpedantic"
     - "-Wconversion"
     - "-Wsign-conversion"
     - "-Wshadow"
-    
-    # Desactiva warnings molestos en desarrollo
     - "-Wno-unused-parameter"
     - "-Wno-unused-variable"
-    
-  # Flags que quieres remover (útil si compile_commands.json los incluye)
-  Remove:
-    # Ejemplo: si CMake añade flags de target que confunden a clangd
-    # - "-march=native"
+    - "-Wno-sign-compare"
 
-# ----------------------------------------------------------------------------
-# Diagnósticos
-# ----------------------------------------------------------------------------
 Diagnostics:
-  # Nivel de severidad mínima para mostrar
-  # Opciones: Error, Warning, Information, Hint
-  Suppress:
-    # Suprime advertencias específicas por nombre
-    # Ejemplo: - "unused-variable"
-    
+  # Configuración de clang-tidy para análisis de performance y modernización
   ClangTidy:
-    # Activa clang-tidy para análisis estático adicional
     Add:
-      # Checks básicos de modernización
       - "modernize-*"
-      
-      # Checks de performance
       - "performance-*"
-      
-      # Checks de legibilidad
       - "readability-identifier-naming"
       - "readability-braces-around-statements"
-      
-      # Checks de seguridad
       - "bugprone-*"
-      
     Remove:
-      # Desactiva checks molestos o falsos positivos
       - "modernize-use-trailing-return-type"
       - "readability-magic-numbers"
       - "bugprone-easily-swappable-parameters"
+      - "modernize-pass-by-value"
 
-# ----------------------------------------------------------------------------
-# Índice del código
-# ----------------------------------------------------------------------------
 Index:
-  # Indexar archivos en background para completado más rápido
+  # Indexación en segundo plano para rapidez en proyectos grandes
   Background: Build
-  
-  # Directorios a indexar (relativo a la raíz del proyecto)
-  StandardLibrary: Yes
+  StandardLibrary: true
 
-# ----------------------------------------------------------------------------
-# Completado de código
-# ----------------------------------------------------------------------------
 Completion:
-  # Límite de ítems en el menú de completado
-  Limit: 50
-  
-  # Incluir completados de todos los símbolos accesibles
-  AllScopes: Yes
+  # Incluye símbolos de todos los archivos indexados
+  AllScopes: true
+  # Estilo de completado detallado
+  Placeholder: true
 
-# ----------------------------------------------------------------------------
-# Hover (información al pasar el cursor)
-# ----------------------------------------------------------------------------
 Hover:
-  # Muestra la firma completa de funciones
-  ShowAKA: Yes
+  # Muestra información extendida sobre tipos y plantillas
+  ShowAKA: true
 
-# ----------------------------------------------------------------------------
-# InlayHints (hints visuales en el código)
-# ----------------------------------------------------------------------------
 InlayHints:
-  # Muestra nombres de parámetros en llamadas a función
-  ParameterNames: Yes
-  
-  # Muestra tipos deducidos auto/decltype
-  DeducedTypes: Yes
-  
-  # Muestra tipos designados en structured bindings
-  Designators: Yes
+  # Muestra visualmente los nombres de los parámetros en las llamadas
+  ParameterNames: true
+  # Muestra los tipos deducidos en 'auto'
+  DeducedTypes: true
+  # Muestra los tipos en Structured Bindings
+  Designators: true
+  # Muestra tipos de retorno implícitos
+  ReturnType: true
 
-# ----------------------------------------------------------------------------
-# Notas de uso
-# ----------------------------------------------------------------------------
+# ============================================================================
+# NOTA PARA NEOVIM (nvim-lspconfig):
+# El error 'Limit' ocurría porque no es una opción válida en el archivo .clangd.
+# Debes configurar el límite de resultados en tu init.lua de la siguiente forma:
 #
-# 1. Generar compile_commands.json:
-#    $ mkdir -p build && cd build
-#    $ cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
-#    $ cd ..
-#
-# 2. Verificar que clangd lo encuentra:
-#    $ clangd --check=src/kron-main.cpp
-#
-# 3. En nvim, asegúrate de tener configurado el LSP:
-#    require('lspconfig').clangd.setup{}
-#
-# 4. Si clangd no encuentra los headers, verifica que la ruta de CompilationDatabase
-#    sea correcta y que compile_commands.json exista en build/
-#
-# 5. Para recargar la configuración en nvim:
-#    :LspRestart
-#
-# ----------------------------------------------------------------------------
+# require('lspconfig').clangd.setup({
+#   cmd = { "clangd", "--limit-results=50", "--header-insertion=never" }
+# })
+# ============================================================================
