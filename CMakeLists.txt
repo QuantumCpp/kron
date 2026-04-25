@@ -7,49 +7,56 @@ project(kron
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# 1. Configuración de Compilación
 add_compile_options(
-    -Wall
-    -Wextra
-    -Wpedantic
-    -Wconversion
-    -Wsign-conversion
-    -Wshadow
-    -Wold-style-cast
-    -Wcast-align
-    -Wunused
-    -Wformat=2
-    -fsanitize=address,undefined  # ← ASan + UBSan
-    -g                            # ← símbolos de debug
-    -fno-omit-frame-pointer       # ← stack traces legibles
+    -Wall -Wextra -Wpedantic -Wconversion 
+    -Wshadow -fsanitize=address,undefined 
+    -g -fno-omit-frame-pointer
+)
+add_link_options(-fsanitize=address,undefined)
+
+# 2. Definir la Librería del Núcleo (Sin el main)
+set(LIB_SOURCES
+    src/core-system/tokenization.cpp
+    src/core-system/parsing.cpp
+    src/core-system/executor.cpp
+    src/core-system/validator.cpp
+    src/error-register-information/error_hanlder.cpp
+    src/command-register-information/command-information.cpp
+    src/command-register-information/command-get-option.cpp
+    src/command-register-information/command-handler-include/command-hanlder-cpp/list.cpp
+    src/option-register-information/option-information.cpp
+    src/option-register-information/option-get-option.cpp
+    src/option-register-information/special-option/help-hanldler.cpp
+    src/option-register-information/special-option/version-handler.cpp
 )
 
-add_link_options(
-    -fsanitize=address,undefined  # ← necesario también en el linker
-)
+add_library(kron_core STATIC ${LIB_SOURCES})
 
-file(GLOB_RECURSE KRON_SOURCES
-    "${PROJECT_SOURCE_DIR}/src/*.cpp"
-)
-
-add_executable(kron ${KRON_SOURCES})
-
-target_include_directories(kron PRIVATE
+target_include_directories(kron_core PUBLIC 
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_BINARY_DIR}/generated
 )
 
+# 3. Configurar archivos generados
 configure_file(
     "${PROJECT_SOURCE_DIR}/include/special-option/version-option.hpp"
     "${PROJECT_BINARY_DIR}/generated/version-option.hpp"
 )
 
-target_include_directories(kron PRIVATE 
-    "${PROJECT_BINARY_DIR}/generated"
-)
+# 4. El Ejecutable Principal
+add_executable(kron src/kron-main.cpp)
+target_link_libraries(kron PRIVATE kron_core)
 
+# --- 5. INFRAESTRUCTURA DE TESTS (MODIFICACIÓN AQUÍ) ---
+# Habilitamos CTest a nivel global
+enable_testing()
 
-install(TARGETS kron
-    RUNTIME DESTINATION bin
-)
+# Añadimos el subdirectorio de tests. 
+# Esto buscará el archivo 'tests/CMakeLists.txt'
+add_subdirectory(tests)
+
+# 6. Instalación
+install(TARGETS kron RUNTIME DESTINATION bin)
