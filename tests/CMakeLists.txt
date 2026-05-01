@@ -13,7 +13,7 @@ FetchContent_MakeAvailable(googletest)
 # Definir el ejecutable de pruebas
 add_executable(kron_tests
     TOKENIZATION_TEST.cpp
-    # PARSING_TEST.cpp  <-- Descomenta cuando los tengas listos
+    PARSING_TEST.cpp 
     # EXECUTOR_TEST.cpp
 )
 

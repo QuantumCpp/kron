@@ -6,4 +6,8 @@ struct GroupToken{
   Token command;
   std::vector<Token> options;
   std::vector<Token> positional;
+
+  [[nodiscard]] bool empty() const{
+    return options.empty() && positional.empty() && command.name.empty();
+  }
 };

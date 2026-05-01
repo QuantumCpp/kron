@@ -9,6 +9,7 @@ static std::unordered_map<std::string, OptionMetaData, transparent_hash, std::eq
 
 void GeneralOptionLog(const OptionMetaData& option){
   table_option[option.normalized_name] = option;
+  table_option[option.alias_name] = option;
 }
 
 const OptionMetaData* GetOptionData(std::string_view option){

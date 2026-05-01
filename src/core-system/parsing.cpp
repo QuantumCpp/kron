@@ -13,14 +13,9 @@ GroupToken parsing(const std::vector<Token>& token_raw){
   GroupToken token_clasificated;
   std::unordered_set<std::string_view> see_token;
 
-
   //Tratamiento y verificacion de existencia 
   for(size_t pos = 0 ; pos < token_raw.size() ; pos++ ){
     const auto& individual_token = token_raw[pos];
-
-    if(see_token.contains(individual_token.name) && individual_token.type == TypeToken::LITERAL){
-      continue;
-    }
 
     //Comprobar si existe un comando y si es valido :
     if(individual_token.type == TypeToken::COMMAND){
@@ -58,7 +53,7 @@ GroupToken parsing(const std::vector<Token>& token_raw){
                   .name = data_token->normalized_name,
                   .value = next_token.name,
                   });
-              see_token.insert(next_token.name);
+              pos ++;
               continue;
             }
             else{
@@ -119,7 +114,7 @@ GroupToken parsing(const std::vector<Token>& token_raw){
                  .name = data_token->normalized_name,
                  .value = token_raw[pos + 1].name,
                  });
-             see_token.insert(token_raw[pos + 1].name);
+             pos++;
              break;
           }
           else{

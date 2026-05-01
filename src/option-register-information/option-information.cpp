@@ -207,4 +207,13 @@ void CreatedOptionData() {
     parents.alias_name = "-p";
     parents.category = OptionCategory::CREATION;
     GeneralOptionLog(parents);
+    
+    OptionMetaData output;
+    output.normalized_name = "--output";
+    output.alias_name = "-o";
+    output.conflict_name = {};
+    output.category = OptionCategory::CREATION;
+    output.data_type = TypeDataReceived::STRING;
+    output.hanlder = std::monostate{};
+    GeneralOptionLog(output);
 }
