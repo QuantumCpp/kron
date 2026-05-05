@@ -12,6 +12,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <linux/limits.h>
 #include <linux/stat.h>
 #include <mutex>
 #include <queue>
@@ -43,7 +44,7 @@ namespace {
     };
 
     struct PendingDir {
-        std::string path; // Debe ser string para ser dueño de la memoria en la cola
+        std::string path;
         int depth;
     };
 
@@ -91,8 +92,8 @@ namespace {
             
             fe.btime = (stx.stx_mask & STATX_BTIME) ? stx.stx_btime.tv_sec : 0;
 
-            fe.is_directory = S_ISDIR(stx.stx_mode);
-            fe.is_symlink = S_ISLNK(stx.stx_mode);
+            fe.is_directory = (entry->d_type == DT_DIR);
+            fe.is_symlink = (entry->d_type == DT_LNK);
             fe.symlink_broken = false;
             fe.has_capabilities = false;
 
@@ -230,6 +231,9 @@ void LIST_HANDLER(const GroupToken& token_group) {
         threads.emplace_back([&, options_bool, depth_limit](std::stop_token stop) {
             std::vector<FileEntry> file_entry_temp;
             std::vector<PendingDir> temp_pending_dir;
+            
+            std::string full_path;
+            full_path.reserve(PATH_MAX);
 
             while (!stop.stop_requested()) {
                 PendingDir current;
@@ -262,7 +266,9 @@ void LIST_HANDLER(const GroupToken& token_group) {
                     if (name == "." || name == "..") {continue;}
                     if (!options_bool.all && name.starts_with('.')) {continue;}
 
-                    std::string full_path = std::format("{}/{}", current.path, name);
+                    full_path = current.path;
+                    if(full_path.back() != '/') {full_path += "/";}
+                    full_path += name;
 
                     if (entry->d_type == DT_DIR && options_bool.recursive && current.depth < depth_limit) {
                         temp_pending_dir.push_back({.path = full_path, .depth = current.depth + 1});
