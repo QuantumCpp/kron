@@ -41,9 +41,10 @@ target_include_directories(kron_core PUBLIC
 )
 
 # 3. Configurar archivos generados
+# 3. Configurar archivos generados
 configure_file(
-    "${PROJECT_SOURCE_DIR}/include/special-option/version-option.hpp"
-    "${PROJECT_BINARY_DIR}/generated/version-option.hpp"
+    "${PROJECT_SOURCE_DIR}/include/special-option/version-option.hpp.in"
+    "${PROJECT_BINARY_DIR}/generated/special-option/version-option.hpp" # Añadido special-option/
 )
 
 # 4. El Ejecutable Principal

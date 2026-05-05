@@ -4,7 +4,7 @@
 #include "../../include/option/option-implementation.hpp"
 #include "../../include/option/option-raw-metadata.hpp"
 #include "../../include/special-option/help-option.hpp"
-#include "../../include/special-option/version-option.hpp"
+#include "special-option/version-option.hpp"
 #include "../../include/token/token-raw-metadata.hpp"
 #include <algorithm>
 #include <chrono>
