@@ -44,7 +44,6 @@ Index:
 Completion:
   # Incluye símbolos de todos los archivos indexados
   AllScopes: true
-
 Hover:
   # Muestra información extendida sobre tipos y plantillas
   ShowAKA: true
@@ -58,7 +57,6 @@ InlayHints:
   Designators: true
   # Muestra tipos de retorno implícitos
   FunctionReturnTypes: true
-
 # ============================================================================
 # NOTA PARA NEOVIM (nvim-lspconfig):
 # El error 'Limit' ocurría porque no es una opción válida en el archivo .clangd.
