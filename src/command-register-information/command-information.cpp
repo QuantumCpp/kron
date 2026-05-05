@@ -30,6 +30,9 @@ void CreatedCommandData(){
     "--dirs-first",   // Muestra directorios antes que archivos
     "--filter",       // Filtra por patrón glob: *.cpp, test_*
     "--no-header",
+    "--size-gt",
+    "--modified-before",
+    "--modified-after"
   });
   list.handler = LIST_HANDLER;
   GeneralCommandLog(list);

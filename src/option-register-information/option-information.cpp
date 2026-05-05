@@ -80,13 +80,13 @@ void CreatedOptionData() {
     depth.normalized_name = "--depth";
     depth.alias_name = "-d";
     depth.requieres_name = {"--recursive"};
-    depth.data_type = TypeDataReceived::EXTENSION;
+    depth.data_type = TypeDataReceived::STRING;
     depth.category = OptionCategory::FILTERING;
     GeneralOptionLog(depth);
 
     OptionMetaData filter;
     filter.normalized_name = "--filter";
-    filter.data_type = TypeDataReceived::STRING;
+    filter.data_type = TypeDataReceived::EXTENSION;
     filter.category = OptionCategory::FILTERING;
     filter.hanlder = FilteringProcess([](FilterStruct& filter_contex) {
         const auto* pattern_ptr = std::any_cast<std::string>(&filter_contex.context);
@@ -105,6 +105,57 @@ void CreatedOptionData() {
         });
     });
     GeneralOptionLog(filter);
+
+    
+    OptionMetaData modified_before;
+    modified_before.normalized_name = "--modified-before";
+    modified_before.data_type = TypeDataReceived::DATE;
+    modified_before.category = OptionCategory::FILTERING;
+    /*
+    filter.hanlder = FilteringProcess([](FilterStruct& filter_contex) {
+        const auto* pattern_ptr = std::any_cast<std::string>(&filter_contex.context);
+        if (!pattern_ptr) {return;}
+
+        const std::string& pattern = *pattern_ptr;
+        std::erase_if(filter_contex.entries, [&pattern](const FileEntry& e) {
+            std::string_view filename = e.name;
+            if (pattern.starts_with('*')) {
+                return !filename.ends_with(std::string_view(pattern).substr(1));
+            }
+            if (pattern.ends_with('*')) {
+                return !filename.starts_with(std::string_view(pattern).substr(0, pattern.size() - 1));
+            }
+            return filename != pattern;
+        });
+    });
+    */
+    GeneralOptionLog(modified_before);
+
+    
+    OptionMetaData modified_after;
+    modified_after.normalized_name = "--modified-after";
+    modified_after.data_type = TypeDataReceived::DATE;
+    modified_after.category = OptionCategory::FILTERING;
+    /*
+    filter.hanlder = FilteringProcess([](FilterStruct& filter_contex) {
+        const auto* pattern_ptr = std::any_cast<std::string>(&filter_contex.context);
+        if (!pattern_ptr) {return;}
+
+        const std::string& pattern = *pattern_ptr;
+        std::erase_if(filter_contex.entries, [&pattern](const FileEntry& e) {
+            std::string_view filename = e.name;
+            if (pattern.starts_with('*')) {
+                return !filename.ends_with(std::string_view(pattern).substr(1));
+            }
+            if (pattern.ends_with('*')) {
+                return !filename.starts_with(std::string_view(pattern).substr(0, pattern.size() - 1));
+            }
+            return filename != pattern;
+        });
+    });
+    */
+    GeneralOptionLog(modified_after);
+
 
     // --- ORDENAMIENTO (SORTING) ---
 
@@ -216,4 +267,14 @@ void CreatedOptionData() {
     output.data_type = TypeDataReceived::STRING;
     output.hanlder = std::monostate{};
     GeneralOptionLog(output);
+
+    
+    OptionMetaData size_gt;
+    size_gt.normalized_name = "--size-gt";
+    size_gt.alias_name = "";
+    size_gt.conflict_name = {};
+    size_gt.category = OptionCategory::FILTERING;
+    size_gt.data_type = TypeDataReceived::SIZE;
+    size_gt.hanlder = std::monostate{};
+    GeneralOptionLog(size_gt);
 }

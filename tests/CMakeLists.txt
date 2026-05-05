@@ -14,7 +14,7 @@ FetchContent_MakeAvailable(googletest)
 add_executable(kron_tests
     TOKENIZATION_TEST.cpp
     PARSING_TEST.cpp 
-    # EXECUTOR_TEST.cpp
+    VALIDATION_TEST.cpp
 )
 
 # Linkear contra la lógica de tu proyecto y GTest

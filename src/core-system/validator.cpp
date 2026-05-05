@@ -20,6 +20,7 @@
 
 namespace {
   bool DATE_VALIDATED(const std::string_view& date_str){
+    if(date_str.empty()){return false;}
     std::istringstream str_validated(std::string{date_str});
     std::chrono::sys_days parser_date;
 
@@ -66,6 +67,7 @@ namespace {
   }
 
   bool EXTENSION_VALIDATED(std::string_view extension_str){
+    if(extension_str.empty()){return false;}
     if(extension_str.starts_with(".")) {extension_str.remove_prefix(1);}
     if(extension_str.empty()) {return false;}
     return std::ranges::none_of(extension_str,[](char c){
@@ -187,12 +189,11 @@ bool ValidationGroupToken(GroupToken& group_raw){
       case TypeDataReceived::SIZE:
         if(!SIZE_VALIDATED(element.value)){
           return false;
-        };
+        }
         break;
-      case TypeDataReceived::NONE:
+      case TypeDataReceived::STRING:
+        if(element.value.empty() || element.value == " "){ return false;}
         break;
-    }
-
     //Validar si estan las opciones que requiere otra opciones
     //Implementacion cuando alguna lo requiera porque por ahora ninguna requiere 
   }
@@ -209,6 +210,6 @@ bool ValidationGroupToken(GroupToken& group_raw){
       });
   
 
-
+  }
   return true;
 }
