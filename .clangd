@@ -44,8 +44,6 @@ Index:
 Completion:
   # Incluye símbolos de todos los archivos indexados
   AllScopes: true
-  # Estilo de completado detallado
-  Placeholder: true
 
 Hover:
   # Muestra información extendida sobre tipos y plantillas
@@ -59,7 +57,7 @@ InlayHints:
   # Muestra los tipos en Structured Bindings
   Designators: true
   # Muestra tipos de retorno implícitos
-  ReturnType: true
+  FunctionReturnTypes: true
 
 # ============================================================================
 # NOTA PARA NEOVIM (nvim-lspconfig):
