@@ -91,23 +91,23 @@ protected:
 TEST_F(ExecutorSuite, SpeedTest_RecursiveList_Home) {
     // We use a directory that is likely to have many files to make metrics meaningful.
     // WARNING: This might be slow if the home directory is huge.
-    std::vector<std::string> input = {"list", "--recursive", "."}; 
+    std::vector<std::string> input = {"list", "--recursive", "/home/nobel/Documents/ollama/"}; 
     
-    std::cout << "[ INFO ] Starting benchmark for: kron list --recursive .\n";
+    std::cout << "[ INFO ] Starting benchmark for: kron list --recursive\n";
     
     auto metrics = run_benchmark(input);
-    print_metrics("kron list --recursive .", metrics);
+    print_metrics("kron list --recursive ", metrics);
     
     SUCCEED();
 }
 
 TEST_F(ExecutorSuite, SpeedTest_LargeList_LongFormat) {
-    std::vector<std::string> input = {"list", "--all", "--long", "."};
+    std::vector<std::string> input = {"list", "--all", "--long", "/home/nobel/Documents/ollama/"};
     
-    std::cout << "[ INFO ] Starting benchmark for: kron list --all --long .\n";
+    std::cout << "[ INFO ] Starting benchmark for: kron list --all --long \n";
     
     auto metrics = run_benchmark(input);
-    print_metrics("kron list --all --long .", metrics);
+    print_metrics("kron list --all --long ", metrics);
     
     SUCCEED();
 }
